@@ -589,4 +589,64 @@ async function initPyodide() {
 
 document.getElementById('q').addEventListener('change', function() {
     document.getElementById('customQDiv').style.display = 
-        this.value === 'custom' ? 'block'
+        this.value === 'custom' ? 'block' : 'none';
+});
+
+document.getElementById('calculateBtn').addEventListener('click', async function() {
+    const loading = document.getElementById('loading');
+    const btn = this;
+    
+    const xData = parseArrayString(document.getElementById('xData').value);
+    const yData = parseArrayString(document.getElementById('yData').value);
+    const Hl = parseArrayString(document.getElementById('Hl').value);
+    const Hv = parseArrayString(document.getElementById('Hv').value);
+    
+    const validations = [validateArray(xData, 'xData'), validateArray(yData, 'yData'),
+                         validateArray(Hl, 'Hl'), validateArray(Hv, 'Hv')];
+    for (let v of validations) if (!v.valid) { alert('Error: ' + v.error); return; }
+    
+    if (xData.length !== yData.length || xData.length !== Hl.length || xData.length !== Hv.length) {
+        alert('Error: Semua array harus sama panjang!'); return;
+    }
+    
+    let q = document.getElementById('q').value;
+    q = q === 'custom' ? parseFloat(document.getElementById('customQ').value) : parseFloat(q);
+    
+    const inputData = {
+        xData, yData, Hl, Hv,
+        zF: parseFloat(document.getElementById('zF').value),
+        F: parseFloat(document.getElementById('F').value),
+        xD: parseFloat(document.getElementById('xD').value),
+        xB: parseFloat(document.getElementById('xB').value),
+        q, R: parseFloat(document.getElementById('R').value)
+    };
+    
+    btn.disabled = true;
+    loading.style.display = 'block';
+    
+    try {
+        const results = await runCalculation(inputData);
+        results.error ? alert('Error: ' + results.error) : displayResults(results);
+    } catch (error) {
+        alert('Error: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        loading.style.display = 'none';
+    }
+});
+
+document.getElementById('exportBtn').addEventListener('click', function() {
+    if (!currentResults) return;
+    let csv = 'Stage,x (Liquid),y (Vapor)\n';
+    currentResults.stage_compositions.forEach((stage, i) => {
+        csv += `${i+1},${stage.x.toFixed(4)},${stage.y.toFixed(4)}\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'ponchon_savarit_results.csv'; a.click();
+    window.URL.revokeObjectURL(url);
+});
+
+updatePreview();
+initPyodide();
