@@ -14,6 +14,9 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
+    <!-- Pyodide -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+    
     <style>
         /* ========== RESET & BASE ========== */
         * {
@@ -28,7 +31,7 @@
             background-color: #f8f9fa;
         }
 
-        /* ========== MAIN CONTAINER - SCROLL UTAMA ========== */
+        /* ========== MAIN CONTAINER ========== */
         .main-container {
             height: 100vh;
             overflow-y: auto;
@@ -57,24 +60,23 @@
 
         /* ========== MAIN CONTENT ========== */
         .main-content {
-            padding: 30px;
+            padding: 20px;
             background-color: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
 
         /* ========== PLOT CONTAINER ========== */
         #plotDiv {
             width: 100%;
-            height: 800px;  /* Plot gede */
-            margin-bottom: 30px;
+            height: 70vh;  /* 70% viewport height */
+            min-height: 600px;
             border: 1px solid #dee2e6;
             border-radius: 12px;
             background: white;
             box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            transition: all 0.3s ease;
-        }
-
-        #plotDiv:hover {
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+            margin-bottom: 20px;
         }
 
         /* ========== RESULTS SECTION ========== */
@@ -82,97 +84,67 @@
             background: white;
             border-radius: 12px;
             border: 1px solid #dee2e6;
-            padding: 25px;
-            margin-top: 20px;
+            padding: 20px;
+            margin-top: 10px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            flex-shrink: 0;
         }
 
         .results-section .nav-tabs {
             border-bottom: 2px solid #e9ecef;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         .results-section .nav-tabs .nav-link {
             border: none;
             color: #6c757d;
             font-weight: 500;
-            padding: 10px 20px;
+            padding: 8px 16px;
             margin-right: 10px;
             border-radius: 8px 8px 0 0;
-            transition: all 0.2s ease;
-        }
-
-        .results-section .nav-tabs .nav-link:hover {
-            color: #0d6efd;
-            background: #f8f9fa;
         }
 
         .results-section .nav-tabs .nav-link.active {
             color: #0d6efd;
             background: white;
             border-bottom: 3px solid #0d6efd;
-            font-weight: 600;
         }
 
         /* ========== TABLES ========== */
         .table-responsive {
-            max-height: 400px;
+            max-height: 300px;
             overflow-y: auto;
             border: 1px solid #dee2e6;
             border-radius: 8px;
-            background: white;
         }
 
         .table {
             margin-bottom: 0;
-            background: white;
         }
 
         .table thead th {
             position: sticky;
             top: 0;
             background: #f8f9fa;
-            color: #495057;
-            font-weight: 600;
-            border-bottom: 2px solid #dee2e6;
             z-index: 10;
-            padding: 12px;
-        }
-
-        .table tbody td {
-            padding: 10px 12px;
-            vertical-align: middle;
-        }
-
-        .table tbody tr:hover {
-            background-color: #f8f9fa;
         }
 
         /* ========== FORM CONTROLS ========== */
         .form-control, .form-select {
             border: 1px solid #dee2e6;
             border-radius: 8px;
-            padding: 10px 12px;
-            transition: all 0.2s ease;
+            padding: 8px 12px;
         }
 
         .form-control:focus, .form-select:focus {
             border-color: #0d6efd;
             box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
-            outline: none;
-        }
-
-        .form-label {
-            font-weight: 500;
-            color: #495057;
-            margin-bottom: 6px;
         }
 
         .btn {
             border-radius: 8px;
-            padding: 12px 20px;
+            padding: 10px 20px;
             font-weight: 500;
-            transition: all 0.2s ease;
         }
 
         .btn-success {
@@ -186,11 +158,6 @@
             box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
         }
 
-        .btn-success:disabled {
-            background: #6c757d;
-            transform: none;
-        }
-
         /* ========== PREVIEW TABLE ========== */
         .preview-container {
             background: #f8f9fa;
@@ -201,11 +168,7 @@
 
         #previewTable {
             font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
-        }
-
-        #previewTable th {
-            background: #e9ecef;
+            font-size: 0.85rem;
         }
 
         /* ========== LOADING OVERLAY ========== */
@@ -234,48 +197,15 @@
         }
 
         .progress {
-            height: 30px;
-            border-radius: 15px;
-            background-color: #e9ecef;
+            height: 25px;
+            border-radius: 12px;
             margin: 20px 0;
-            overflow: hidden;
         }
 
         .progress-bar {
             background: linear-gradient(90deg, #0d6efd, #0dcaf0);
-            transition: width 0.3s ease;
-            line-height: 30px;
+            line-height: 25px;
             font-size: 14px;
-            font-weight: bold;
-            color: white;
-        }
-
-        /* ========== STATUS BADGE ========== */
-        #pyodide-status {
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 20px;
-            font-weight: 500;
-        }
-
-        /* ========== SCROLLBAR CUSTOM ========== */
-        ::-webkit-scrollbar {
-            width: 10px;
-            height: 10px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 5px;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #888;
-            border-radius: 5px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #555;
         }
 
         /* ========== RESPONSIVE ========== */
@@ -287,15 +217,8 @@
             }
             
             #plotDiv {
-                height: 500px;
-            }
-            
-            .main-content {
-                padding: 15px;
-            }
-            
-            .results-section {
-                padding: 15px;
+                height: 50vh;
+                min-height: 400px;
             }
         }
     </style>
@@ -304,7 +227,7 @@
     <div class="main-container">
         <div class="container-fluid">
             <div class="row">
-                <!-- SIDEBAR - INPUT PANEL (STICKY) -->
+                <!-- SIDEBAR - INPUT PANEL -->
                 <div class="col-md-4 col-lg-3 sidebar p-4">
                     <h2>
                         <i class="fas fa-flask me-2"></i>
@@ -455,9 +378,9 @@
                     </div>
                 </div>
                 
-                <!-- MAIN CONTENT - SCROLLABLE -->
+                <!-- MAIN CONTENT -->
                 <div class="col-md-8 col-lg-9 main-content">
-                    <!-- Plot - GEDE, SUBPLOT RAPAT -->
+                    <!-- Plot -->
                     <div id="plotDiv"></div>
                     
                     <!-- Results Section -->
@@ -489,7 +412,7 @@
                                         <tbody id="summaryBody">
                                             <tr>
                                                 <td colspan="2" class="text-center text-muted py-4">
-                                                    <i class="fas fa-calculator me-2"></i>No results yet. Click Calculate!
+                                                    <i class="fas fa-calculator me-2"></i>No results yet
                                                 </td>
                                             </tr>
                                         </tbody>
@@ -511,7 +434,7 @@
                                         <tbody id="stagesBody">
                                             <tr>
                                                 <td colspan="3" class="text-center text-muted py-4">
-                                                    <i class="fas fa-calculator me-2"></i>No results yet. Click Calculate!
+                                                    <i class="fas fa-calculator me-2"></i>No results yet
                                                 </td>
                                             </tr>
                                         </tbody>
@@ -528,14 +451,13 @@
     <!-- LOADING OVERLAYS -->
     <div id="pyodide-loading" class="loading-overlay">
         <div class="loading-content">
-            <img src="https://media.giphy.com/media/3o7abKh6O3pLgA8Qbi/giphy.gif" width="120" alt="Loading">
+            <img src="https://media.giphy.com/media/3o7abKh6O3pLgA8Qbi/giphy.gif" width="100" alt="Loading">
             <h4 class="mt-4">🔥 Lagi nyalain mesin Python...</h4>
             <p class="text-muted">Downloading library (35MB) - hanya sekali!</p>
             <div class="progress">
                 <div id="loading-progress" class="progress-bar" style="width: 0%">0%</div>
             </div>
             <p id="loading-status" class="text-muted mt-3">Loading Pyodide...</p>
-            <p class="text-muted small mt-2">Next visit bakal lebih cepet!</p>
         </div>
     </div>
     
@@ -543,13 +465,13 @@
         <div class="loading-content">
             <div class="spinner-border text-primary" style="width: 4rem; height: 4rem;" role="status"></div>
             <h4 class="mt-4">🧮 Menghitung stages...</h4>
-            <p class="text-muted">Proses kalkulasi Ponchon-Savarit</p>
         </div>
     </div>
     
-    <!-- SCRIPTS -->
+    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+    
+    <!-- Custom JS -->
     <script src="script.js"></script>
 </body>
 </html>
