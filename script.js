@@ -606,6 +606,7 @@ results.stage_compositions.forEach((stage, i) => {
 });
     
     // ========== LAYOUT ==========
+// ========== LAYOUT - SUBPLOT MEPET + TITLE X ATAS DIHAPUS ==========
 const layout = {
     title: {
         text: '<b>Ponchon–Savarit Diagram: Binary Distillation Analysis</b>',
@@ -618,46 +619,64 @@ const layout = {
         pattern: 'independent',
         roworder: 'top to bottom'
     },
-    // MARGIN KECIL
     margin: {
-        l: 60,   // kiri
-        r: 100,  // kanan
-        t: 50,   // atas
-        b: 50,   // bawah
+        l: 70,
+        r: 120,
+        t: 60,
+        b: 60,
         pad: 0
     },
     xaxis: {
-        domain: [0.1, 0.9],
-        title: '<b>Mole Fraction (x or y)</b>',
+        domain: [0.12, 0.88],  // Lebar plot
+        title: '',  // <-- TITLE DIHAPUS!
+        showticklabels: true,   // Ticks tetap muncul
         range: [0, 1],
         tickformat: '.2f',
         tickfont: {size: 10},
-        titlefont: {size: 12}
+        gridcolor: '#E0E0E0',
+        showline: true,
+        linewidth: 1,
+        linecolor: '#1E1E1E',
+        mirror: true
     },
     yaxis: {
-        domain: [0.52, 0.95],  // <-- SUBPLOT ATAS (NEMPEL KE SUBPLOT BAWAH)
+        domain: [0.52, 0.95],  // Subplot atas (nempel)
         title: '<b>Enthalpy (MJ/kmol)</b>',
         range: [results.yMin, results.yMax],
         tickfont: {size: 10},
-        titlefont: {size: 12}
+        titlefont: {size: 12},
+        gridcolor: '#E0E0E0',
+        showline: true,
+        linewidth: 1,
+        linecolor: '#1E1E1E',
+        mirror: true
     },
     xaxis2: {
-        domain: [0.1, 0.9],
-        title: '<b>Mole Fraction (x or y)</b>',
+        domain: [0.12, 0.88],
+        title: '<b>Mole Fraction (x or y)</b>',  // Title cuma di sini
         range: [0, 1],
         tickformat: '.2f',
         tickfont: {size: 10},
-        titlefont: {size: 12}
+        titlefont: {size: 12},
+        gridcolor: '#E0E0E0',
+        showline: true,
+        linewidth: 1,
+        linecolor: '#1E1E1E',
+        mirror: true
     },
     yaxis2: {
-        domain: [0.05, 0.48],  // <-- SUBPLOT BAWAH (NEMPEL KE SUBPLOT ATAS)
+        domain: [0.05, 0.48],  // Subplot bawah (nempel)
         title: '<b>y (Vapor Fraction)</b>',
         range: [0, 1],
         tickfont: {size: 10},
-        titlefont: {size: 12}
+        titlefont: {size: 12},
+        gridcolor: '#E0E0E0',
+        showline: true,
+        linewidth: 1,
+        linecolor: '#1E1E1E',
+        mirror: true
     }
 };
-    
     Plotly.newPlot('plotDiv', traces, layout, {responsive: true});
     
     window.addEventListener('resize', () => {
@@ -818,6 +837,7 @@ document.getElementById('exportBtn').addEventListener('click', function() {
 
 updatePreview();
 initPyodide();
+
 
 
 
