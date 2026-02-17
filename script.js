@@ -408,16 +408,16 @@ async function runCalculation(inputData) {
 }
 
 // ==========================================
-// CREATE PLOT
+// CREATE PLOT - PONCHON-SAVARIT STYLE (ELEGAN)
 // ==========================================
 function createPlot(results) {
     const stageColors = ['#FF6B6B', '#4ECDC4', '#FF9F1C', '#6A4C93', '#2E86AB', 
                          '#A23B72', '#F18F01', '#2D6A4F', '#9E2A2B', '#540D6E'];
     
-    // Buat figure dengan subplots
+    // Buat figure dengan subplots - vertical_spacing = 0
     const traces = [];
     
-    // ===== DIAGRAM H-x-y =====
+    // ========== KURVA DASAR H-x-y ==========
     // Saturated liquid curve
     traces.push({
         x: results.x_range,
@@ -425,6 +425,7 @@ function createPlot(results) {
         mode: 'lines',
         name: 'Saturated Liquid',
         line: {color: '#2E86AB', width: 4},
+        legendgroup: 'liquid',
         xaxis: 'x',
         yaxis: 'y'
     });
@@ -436,10 +437,12 @@ function createPlot(results) {
         mode: 'lines',
         name: 'Saturated Vapor',
         line: {color: '#A23B72', width: 4},
+        legendgroup: 'vapor',
         xaxis: 'x',
         yaxis: 'y'
     });
     
+    // ========== GARIS BANTU VERTIKAL ==========
     // xD line
     traces.push({
         x: [results.xD, results.xD],
@@ -473,7 +476,7 @@ function createPlot(results) {
         yaxis: 'y'
     });
     
-    // Difference points
+    // ========== DIFFERENCE POINTS ==========
     traces.push({
         x: [results.xDeltaR, results.xDeltaS],
         y: [results.HDeltaR, results.HDeltaS],
@@ -482,12 +485,12 @@ function createPlot(results) {
         marker: {color: '#F97316', size: 14, symbol: 'star', line: {color: 'white', width: 1}},
         text: ['Δ<sub>R</sub>', 'Δ<sub>S</sub>'],
         textposition: ['top center', 'bottom center'],
-        textfont: {size: 14, color: '#F97316'},
+        textfont: {size: 14, color: '#F97316', family: 'Arial Black'},
         xaxis: 'x',
         yaxis: 'y'
     });
     
-    // Operating line
+    // ========== OPERATING LINE ==========
     traces.push({
         x: [results.xDeltaR, results.zF, results.xDeltaS],
         y: [results.HDeltaR, results.HF, results.HDeltaS],
@@ -499,7 +502,7 @@ function createPlot(results) {
         yaxis: 'y'
     });
     
-    // Minimum reflux line
+    // ========== MINIMUM REFLUX LINE ==========
     traces.push({
         x: [results.xB, results.zF, results.yFMin, results.xD],
         y: [results.QDoublePrimeMin, results.HF, results.HVyF, results.QPrimeMin],
@@ -511,7 +514,37 @@ function createPlot(results) {
         yaxis: 'y'
     });
     
-    // Stage tie lines
+    // ========== MINIMUM DIFFERENCE POINTS ==========
+    traces.push({
+        x: [results.xD, results.xB],
+        y: [results.QPrimeMin, results.QDoublePrimeMin],
+        mode: 'markers+text',
+        name: 'Min Difference Points',
+        marker: {color: '#E9C46A', size: 12, symbol: 'star-diamond', line: {color: 'white', width: 1}},
+        text: ['Δ<sub>R,min</sub>', 'Δ<sub>S,min</sub>'],
+        textposition: ['middle left', 'middle right'],
+        textfont: {size: 12, color: '#E9C46A'},
+        xaxis: 'x',
+        yaxis: 'y'
+    });
+    
+    // ========== CONSTRUCTION LINES ==========
+    if (results.construction_lines && results.construction_lines.length > 0) {
+        results.construction_lines.forEach((line, i) => {
+            traces.push({
+                x: line.x,
+                y: line.y,
+                mode: 'lines',
+                name: i === 0 ? 'Construction Lines' : undefined,
+                line: {color: '#B0B0B0', width: 1.5, dash: 'dot'},
+                showlegend: i === 0,
+                xaxis: 'x',
+                yaxis: 'y'
+            });
+        });
+    }
+    
+    // ========== STAGE TIE LINES ==========
     results.tie_lines.forEach((tie, i) => {
         const color = stageColors[i % stageColors.length];
         traces.push({
@@ -520,13 +553,31 @@ function createPlot(results) {
             mode: 'lines',
             name: `Stage ${i+1}`,
             line: {color: color, width: 3},
+            legendgroup: `stage_${i+1}`,
+            xaxis: 'x',
+            yaxis: 'y'
+        });
+        
+        // Titik pada stage
+        traces.push({
+            x: tie.x,
+            y: tie.y,
+            mode: 'markers',
+            name: `Stage ${i+1} Points`,
+            marker: {
+                color: color,
+                size: 10,
+                symbol: ['circle', 'diamond'],
+                line: {color: 'white', width: 1}
+            },
+            legendgroup: `stage_${i+1}`,
+            showlegend: false,
             xaxis: 'x',
             yaxis: 'y'
         });
     });
     
-    // ===== DIAGRAM VLE =====
-    // Equilibrium curve
+    // ========== VLE CURVE ==========
     traces.push({
         x: results.x_range,
         y: results.y_equilibrium,
@@ -537,7 +588,7 @@ function createPlot(results) {
         yaxis: 'y2'
     });
     
-    // y = x line
+    // ========== y = x LINE ==========
     traces.push({
         x: [0, 1],
         y: [0, 1],
@@ -548,27 +599,123 @@ function createPlot(results) {
         yaxis: 'y2'
     });
     
-    // Stage points in VLE
+    // ========== VLE TRACING HORIZONTAL ==========
     results.stage_compositions.forEach((stage, i) => {
         const color = stageColors[i % stageColors.length];
+        
+        // Garis horizontal dari (x_liq, y_liq) ke (y_liq, y_liq)
         traces.push({
             x: [stage.x, stage.y],
             y: [stage.y, stage.y],
-            mode: 'markers+lines',
-            name: `Stage ${i+1} VLE`,
-            line: {color: color, width: 2},
-            marker: {color: color, size: 8, symbol: ['circle', 'diamond']},
+            mode: 'lines',
+            line: {color: color, width: 2.5},
+            legendgroup: `stage_${i+1}`,
+            showlegend: false,
             xaxis: 'x2',
-            yaxis: 'y2',
-            showlegend: false
+            yaxis: 'y2'
+        });
+        
+        // Titik-titik stage di VLE
+        traces.push({
+            x: [stage.x, stage.y],
+            y: [stage.y, stage.y],
+            mode: 'markers',
+            marker: {
+                color: color,
+                size: 12,
+                symbol: ['circle', 'diamond'],
+                line: {color: 'white', width: 1.5}
+            },
+            legendgroup: `stage_${i+1}`,
+            showlegend: false,
+            hovertemplate: `<b>Stage ${i+1}</b><br>Liquid: x = %{x[0]:.3f}, y = %{y[0]:.3f}<br>Vapor: x = %{x[1]:.3f}, y = %{y[1]:.3f}<extra></extra>`,
+            xaxis: 'x2',
+            yaxis: 'y2'
         });
     });
     
-    // Layout
+    // ========== GARIS PROYEKSI VERTIKAL ==========
+    const y1_min = results.yMin;
+    const y1_max = results.yMax;
+    const y2_min = 0;
+    const y2_max = 1;
+    
+    results.stage_compositions.forEach((stage, i) => {
+        const color = stageColors[i % stageColors.length];
+        const x_liq = stage.x;
+        const y_liq = stage.y;
+        
+        // Cari enthalpy yang sesuai
+        const idxLiq = Math.round(x_liq * 199);
+        const idxVap = Math.round(y_liq * 199);
+        const H_liq_stage = results.HL_curve[idxLiq];
+        const H_vap_stage = results.HV_curve[idxVap];
+        
+        if (H_liq_stage && H_vap_stage) {
+            // Liquid projection
+            traces.push({
+                x: [x_liq, x_liq],
+                y: [y_liq, y2_max],
+                mode: 'lines',
+                line: {color: color, width: 1.8, dash: 'dot'},
+                legendgroup: `stage_${i+1}`,
+                showlegend: false,
+                xaxis: 'x2',
+                yaxis: 'y2'
+            });
+            
+            traces.push({
+                x: [x_liq, x_liq],
+                y: [y1_min, H_liq_stage],
+                mode: 'lines',
+                line: {color: color, width: 1.8, dash: 'dot'},
+                legendgroup: `stage_${i+1}`,
+                showlegend: false,
+                xaxis: 'x',
+                yaxis: 'y'
+            });
+            
+            // Vapor projection
+            traces.push({
+                x: [y_liq, y_liq],
+                y: [y_liq, y2_max],
+                mode: 'lines',
+                line: {color: color, width: 1.8, dash: 'dot'},
+                legendgroup: `stage_${i+1}`,
+                showlegend: false,
+                xaxis: 'x2',
+                yaxis: 'y2'
+            });
+            
+            traces.push({
+                x: [y_liq, y_liq],
+                y: [y1_min, H_vap_stage],
+                mode: 'lines',
+                line: {color: color, width: 1.8, dash: 'dot'},
+                legendgroup: `stage_${i+1}`,
+                showlegend: false,
+                xaxis: 'x',
+                yaxis: 'y'
+            });
+        }
+    });
+    
+    // Legend untuk projection lines
+    traces.push({
+        x: [null],
+        y: [null],
+        mode: 'lines',
+        name: 'Projection Lines',
+        line: {color: '#6C757D', width: 1.8, dash: 'dot'},
+        xaxis: 'x',
+        yaxis: 'y'
+    });
+    
+    // ========== LAYOUT ==========
     const layout = {
         title: {
-            text: 'Ponchon–Savarit Diagram',
-            font: {size: 20, family: 'Arial Black', color: '#1E1E1E'},
+            text: '<b>Ponchon–Savarit Diagram: Binary Distillation Analysis</b>',
+            font: {size: 22, family: 'Arial Black', color: '#1E1E1E'},
             x: 0.5
         },
         grid: {
@@ -578,74 +725,140 @@ function createPlot(results) {
             roworder: 'top to bottom'
         },
         xaxis: {
-            title: 'Mole Fraction (x or y)',
+            title: '<b>Mole Fraction (x or y)</b>',
             range: [0, 1],
             tickformat: '.2f',
-            gridcolor: '#E0E0E0'
+            tickfont: {size: 12, family: 'Arial'},
+            titlefont: {size: 14, family: 'Arial', color: '#1E1E1E'},
+            gridcolor: '#E0E0E0',
+            gridwidth: 1,
+            showline: true,
+            linewidth: 1.5,
+            linecolor: '#1E1E1E',
+            mirror: true
         },
         yaxis: {
-            title: 'Enthalpy (MJ/kmol)',
+            title: '<b>Enthalpy (MJ/kmol)</b>',
             range: [results.yMin, results.yMax],
-            gridcolor: '#E0E0E0'
+            tickfont: {size: 12, family: 'Arial'},
+            titlefont: {size: 14, family: 'Arial', color: '#1E1E1E'},
+            gridcolor: '#E0E0E0',
+            gridwidth: 1,
+            showline: true,
+            linewidth: 1.5,
+            linecolor: '#1E1E1E',
+            mirror: true
         },
         xaxis2: {
-            title: 'Mole Fraction (x or y)',
+            title: '<b>Mole Fraction (x or y)</b>',
             range: [0, 1],
             tickformat: '.2f',
-            gridcolor: '#E0E0E0'
+            tickfont: {size: 12, family: 'Arial'},
+            titlefont: {size: 14, family: 'Arial', color: '#1E1E1E'},
+            gridcolor: '#E0E0E0',
+            gridwidth: 1,
+            showline: true,
+            linewidth: 1.5,
+            linecolor: '#1E1E1E',
+            mirror: true
         },
         yaxis2: {
-            title: 'y (Vapor Fraction)',
+            title: '<b>y (Vapor Fraction)</b>',
             range: [0, 1],
             tickformat: '.2f',
-            gridcolor: '#E0E0E0'
+            tickfont: {size: 12, family: 'Arial'},
+            titlefont: {size: 14, family: 'Arial', color: '#1E1E1E'},
+            gridcolor: '#E0E0E0',
+            gridwidth: 1,
+            showline: true,
+            linewidth: 1.5,
+            linecolor: '#1E1E1E',
+            mirror: true
         },
-        height: 800,
+        height: 1000,
+        width: 1200,
         showlegend: true,
         legend: {
+            orientation: 'v',
+            yanchor: 'top',
+            y: 0.98,
+            xanchor: 'left',
             x: 1.02,
-            y: 1,
-            font: {size: 10},
+            font: {size: 11, family: 'Arial'},
             bgcolor: 'rgba(255,255,255,0.9)',
             bordercolor: '#1E1E1E',
             borderwidth: 1
         },
-        hovermode: 'closest'
+        hovermode: 'x unified',
+        hoverlabel: {
+            bgcolor: 'white',
+            font_size: 12,
+            font_family: 'Arial'
+        },
+        template: 'plotly_white',
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white',
+        margin: {l: 80, r: 150, t: 100, b: 80}
     };
     
     Plotly.newPlot('plotDiv', traces, layout, {responsive: true});
 }
 
 // ==========================================
-// DISPLAY RESULTS
+// DISPLAY RESULTS - DENGAN SCROLL
 // ==========================================
 function displayResults(results) {
     // Create plot
     createPlot(results);
     
-    // Summary table
+    // Summary table dengan scroll
     const summaryHtml = `
-        <tr><td>Distillate Flow Rate (D)</td><td>${results.D} kmol/hr</td></tr>
-        <tr><td>Bottoms Flow Rate (W)</td><td>${results.W} kmol/hr</td></tr>
-        <tr><td>Δ_R</td><td>(${results.xDeltaR}, ${results.HDeltaR} MJ/kmol)</td></tr>
-        <tr><td>Δ_S</td><td>(${results.xDeltaS}, ${results.HDeltaS} MJ/kmol)</td></tr>
-        <tr><td>Condenser Duty (Qc)</td><td>${results.QcKW} kW</td></tr>
-        <tr><td>Reboiler Duty (Qr)</td><td>${results.QrKW} kW</td></tr>
-        <tr><td>Minimum Reflux Ratio</td><td>${results.RMin}</td></tr>
-        <tr><td>Number of Stages</td><td>${results.stages}</td></tr>
-        <tr><td>Feed Stage</td><td>${results.feed_stage}</td></tr>
+        <div style="max-height: 300px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 5px;">
+            <table class="table table-bordered" style="margin-bottom: 0;">
+                <thead class="table-light" style="position: sticky; top: 0; background: #f8f9fa; z-index: 1;">
+                    <tr><th>Parameter</th><th>Value</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Distillate Flow Rate (D)</td><td>${results.D} kmol/hr</td></tr>
+                    <tr><td>Bottoms Flow Rate (W)</td><td>${results.W} kmol/hr</td></tr>
+                    <tr><td>Rectifying Difference Point (Δ_R)</td><td>(${results.xDeltaR}, ${results.HDeltaR} MJ/kmol)</td></tr>
+                    <tr><td>Stripping Difference Point (Δ_S)</td><td>(${results.xDeltaS}, ${results.HDeltaS} MJ/kmol)</td></tr>
+                    <tr><td>Condenser Duty (Qc)</td><td>${results.QcKW} kW</td></tr>
+                    <tr><td>Reboiler Duty (Qr)</td><td>${results.QrKW} kW</td></tr>
+                    <tr><td>Δ_R min</td><td>(${results.xD}, ${results.QPrimeMin} MJ/kmol)</td></tr>
+                    <tr><td>Δ_S min</td><td>(${results.xB}, ${results.QDoublePrimeMin} MJ/kmol)</td></tr>
+                    <tr><td>Minimum Reflux Ratio (R_min)</td><td>${results.RMin}</td></tr>
+                    <tr><td>Number of Theoretical Stages</td><td>${results.stages}</td></tr>
+                    <tr><td>Feed Stage</td><td>${results.feed_stage}</td></tr>
+                </tbody>
+            </table>
+        </div>
     `;
     document.getElementById('summaryBody').innerHTML = summaryHtml;
     
-    // Stages table
-    let stagesHtml = '';
+    // Stages table dengan scroll
+    let stagesHtml = `
+        <div style="max-height: 300px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 5px;">
+            <table class="table table-bordered" style="margin-bottom: 0;">
+                <thead class="table-light" style="position: sticky; top: 0; background: #f8f9fa; z-index: 1;">
+                    <tr><th>Stage</th><th>x (Liquid)</th><th>y (Vapor)</th></tr>
+                </thead>
+                <tbody>
+    `;
+    
     results.stage_compositions.forEach((stage, i) => {
         stagesHtml += `<tr>
             <td>Stage ${i + 1}</td>
-            <td>${stage.x.toFixed(3)}</td>
-            <td>${stage.y.toFixed(3)}</td>
+            <td>${stage.x.toFixed(4)}</td>
+            <td>${stage.y.toFixed(4)}</td>
         </tr>`;
     });
+    
+    stagesHtml += `
+                </tbody>
+            </table>
+        </div>
+    `;
     document.getElementById('stagesBody').innerHTML = stagesHtml;
     
     // Enable export button
