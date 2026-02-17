@@ -686,10 +686,8 @@ const layout = {
     height: 800,
     width: document.querySelector('.main-content')?.clientWidth - 40 || 1000
 };
-    // Ukuran plot
-    height: 800,
-    width: document.querySelector('.main-content')?.clientWidth - 40 || 1000
-};
+
+
     Plotly.newPlot('plotDiv', traces, layout, {responsive: true});
     
     window.addEventListener('resize', () => {
@@ -850,6 +848,7 @@ document.getElementById('exportBtn').addEventListener('click', function() {
 
 updatePreview();
 initPyodide();
+
 
 
 
