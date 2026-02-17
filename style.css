@@ -129,43 +129,25 @@ html, body {
     padding: 20px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
-/* Pastikan nav tabs muncul */
+/* Pastikan tab tetep kelihatan */
 .nav-tabs {
-    border-bottom: 2px solid #dee2e6;
-    margin-bottom: 20px;
-}
-
-.nav-tabs .nav-link {
-    border: none;
-    color: #6c757d;
-    font-weight: 500;
-    padding: 10px 20px;
-    margin-right: 10px;
-    border-radius: 8px 8px 0 0;
-    transition: all 0.2s ease;
-}
-
-.nav-tabs .nav-link:hover {
-    color: #0d6efd;
-    background: #f8f9fa;
-}
-
-.nav-tabs .nav-link.active {
-    color: #0d6efd;
+    position: relative;
+    z-index: 2;
     background: white;
-    border-bottom: 3px solid #0d6efd;
-    font-weight: 600;
 }
 
-/* Pastikan konten di bawah tabs */
-.tab-content {
-    margin-top: 20px;
+/* Scroll container */
+.tab-pane > div {
+    max-height: 300px;
+    overflow-y: auto;
 }
 
-/* Biar tabelnya rapi */
-.table th {
-    background-color: #f8f9fa;
-    font-weight: 600;
+/* Sticky header di tabel */
+.table thead th {
+    position: sticky;
+    top: 0;
+    background: #f8f9fa;
+    z-index: 1;
 }
 /* Responsive */
 @media (max-width: 768px) {
@@ -178,5 +160,6 @@ html, body {
         max-height: 50vh;
     }
 }
+
 
 
