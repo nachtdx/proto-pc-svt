@@ -302,10 +302,7 @@ async function runCalculation(inputData) {
 }
 
 // ==========================================
-// CREATE PLOT - PONCHON-SAVARIT ELEGAN (RESPONSIVE)
-// ==========================================
-// ==========================================
-// CREATE PLOT - PONCHON-SAVARIT (SUBPOLOT MEPET, PROYEKSI NYAMBUNG)
+// CREATE PLOT - PONCHON-SAVARIT (PERSIS KAYAK PYTHON PLOTLY)
 // ==========================================
 function createPlot(results) {
     const stageColors = [
@@ -317,30 +314,32 @@ function createPlot(results) {
     const traces = [];
     
     // ========== KURVA DASAR H-x-y ==========
+    // Saturated Liquid
     traces.push({
         x: results.x_range,
         y: results.HL_curve,
         mode: 'lines',
         name: 'Saturated Liquid',
         line: {color: '#2E86AB', width: 4},
-        legendgroup: 'curves',
+        legendgroup: 'liquid',
         xaxis: 'x',
         yaxis: 'y'
     });
     
+    // Saturated Vapor
     traces.push({
         x: results.x_range,
         y: results.HV_curve,
         mode: 'lines',
         name: 'Saturated Vapor',
         line: {color: '#A23B72', width: 4},
-        legendgroup: 'curves',
+        legendgroup: 'vapor',
         xaxis: 'x',
         yaxis: 'y'
     });
     
-    // ========== GARIS VERTIKAL (MEMBENTANG DI KEDUA SUBPLOT) ==========
-    // xD
+    // ========== GARIS VERTIKAL (x_D, x_B, z_F) - MEMBENTANG DI KEDUA SUBPLOT ==========
+    // x_D - subplot atas
     traces.push({
         x: [results.xD, results.xD],
         y: [results.yMin, results.yMax],
@@ -351,6 +350,7 @@ function createPlot(results) {
         xaxis: 'x',
         yaxis: 'y'
     });
+    // x_D - subplot bawah
     traces.push({
         x: [results.xD, results.xD],
         y: [0, 1],
@@ -361,7 +361,7 @@ function createPlot(results) {
         yaxis: 'y2'
     });
     
-    // xB
+    // x_B - subplot atas
     traces.push({
         x: [results.xB, results.xB],
         y: [results.yMin, results.yMax],
@@ -372,6 +372,7 @@ function createPlot(results) {
         xaxis: 'x',
         yaxis: 'y'
     });
+    // x_B - subplot bawah
     traces.push({
         x: [results.xB, results.xB],
         y: [0, 1],
@@ -382,7 +383,7 @@ function createPlot(results) {
         yaxis: 'y2'
     });
     
-    // zF (Feed)
+    // z_F - subplot atas
     traces.push({
         x: [results.zF, results.zF],
         y: [results.yMin, results.yMax],
@@ -393,6 +394,7 @@ function createPlot(results) {
         xaxis: 'x',
         yaxis: 'y'
     });
+    // z_F - subplot bawah
     traces.push({
         x: [results.zF, results.zF],
         y: [0, 1],
@@ -409,12 +411,7 @@ function createPlot(results) {
         y: [results.HDeltaR, results.HDeltaS],
         mode: 'markers+text',
         name: 'Difference Points',
-        marker: {
-            color: '#F97316', 
-            size: 16, 
-            symbol: 'star', 
-            line: {color: 'white', width: 2}
-        },
+        marker: {color: '#F97316', size: 14, symbol: 'star', line: {color: 'white', width: 1}},
         text: ['Δ<sub>R</sub>', 'Δ<sub>S</sub>'],
         textposition: ['top center', 'bottom center'],
         textfont: {size: 14, color: '#F97316', family: 'Arial Black'},
@@ -429,8 +426,8 @@ function createPlot(results) {
         y: [results.HDeltaR, results.HF, results.HDeltaS],
         mode: 'lines+markers',
         name: 'Operating Line',
-        line: {color: '#0A9396', width: 3.5},
-        marker: {size: 10, color: '#0A9396', symbol: 'circle', line: {color: 'white', width: 1}},
+        line: {color: '#0A9396', width: 3},
+        marker: {size: 8, color: '#0A9396', line: {color: 'white', width: 1}},
         legendgroup: 'lines',
         xaxis: 'x',
         yaxis: 'y'
@@ -442,8 +439,8 @@ function createPlot(results) {
         y: [results.QDoublePrimeMin, results.HF, results.HVyF, results.QPrimeMin],
         mode: 'lines+markers',
         name: 'Minimum Reflux Line',
-        line: {color: '#E9C46A', width: 3, dash: 'dash'},
-        marker: {size: 10, color: '#E9C46A', symbol: 'diamond', line: {color: 'white', width: 1}},
+        line: {color: '#E9C46A', width: 2.5, dash: 'dash'},
+        marker: {size: 8, color: '#E9C46A', line: {color: 'white', width: 1}},
         legendgroup: 'lines',
         xaxis: 'x',
         yaxis: 'y'
@@ -455,12 +452,7 @@ function createPlot(results) {
         y: [results.QPrimeMin, results.QDoublePrimeMin],
         mode: 'markers+text',
         name: 'Min Diff Points',
-        marker: {
-            color: '#E9C46A', 
-            size: 14, 
-            symbol: 'star-diamond', 
-            line: {color: 'white', width: 2}
-        },
+        marker: {color: '#E9C46A', size: 12, symbol: 'star-diamond', line: {color: 'white', width: 1}},
         text: ['Δ<sub>R,min</sub>', 'Δ<sub>S,min</sub>'],
         textposition: ['middle left', 'middle right'],
         textfont: {size: 12, color: '#E9C46A'},
@@ -470,14 +462,14 @@ function createPlot(results) {
     });
     
     // ========== CONSTRUCTION LINES ==========
-    if (results.construction_lines?.length) {
+    if (results.construction_lines && results.construction_lines.length > 0) {
         results.construction_lines.forEach((line, i) => {
             traces.push({
                 x: line.x,
                 y: line.y,
                 mode: 'lines',
                 name: i === 0 ? 'Construction Lines' : undefined,
-                line: {color: '#B0B0B0', width: 2, dash: 'dot'},
+                line: {color: '#B0B0B0', width: 1.5, dash: 'dot'},
                 showlegend: i === 0,
                 legendgroup: 'construction',
                 xaxis: 'x',
@@ -489,18 +481,20 @@ function createPlot(results) {
     // ========== STAGE TIE LINES ==========
     results.tie_lines.forEach((tie, i) => {
         const color = stageColors[i % stageColors.length];
+        
+        // Tie line
         traces.push({
             x: tie.x,
             y: tie.y,
             mode: 'lines',
             name: `Stage ${i+1}`,
-            line: {color, width: 3.5},
+            line: {color: color, width: 3},
             legendgroup: `stage_${i+1}`,
             xaxis: 'x',
             yaxis: 'y'
         });
         
-        // Titik pada stage (liquid = circle, vapor = square)
+        // Titik pada stage
         traces.push({
             x: tie.x,
             y: tie.y,
@@ -508,9 +502,9 @@ function createPlot(results) {
             showlegend: false,
             marker: {
                 color: color,
-                size: 12,
-                symbol: ['circle', 'square'],
-                line: {color: 'white', width: 2}
+                size: 10,
+                symbol: ['circle', 'diamond'],
+                line: {color: 'white', width: 1}
             },
             legendgroup: `stage_${i+1}`,
             xaxis: 'x',
@@ -524,7 +518,7 @@ function createPlot(results) {
         y: results.y_equilibrium,
         mode: 'lines',
         name: 'Equilibrium Curve',
-        line: {color: '#1E1E1E', width: 4},
+        line: {color: '#1E1E1E', width: 3.5},
         legendgroup: 'vle',
         xaxis: 'x2',
         yaxis: 'y2'
@@ -536,13 +530,13 @@ function createPlot(results) {
         y: [0, 1],
         mode: 'lines',
         name: 'y = x',
-        line: {color: '#6C757D', width: 2.5, dash: 'dash'},
+        line: {color: '#6C757D', width: 2, dash: 'dash'},
         legendgroup: 'vle',
         xaxis: 'x2',
         yaxis: 'y2'
     });
     
-    // ========== VLE TRACING ==========
+    // ========== VLE TRACING HORIZONTAL ==========
     results.stage_compositions.forEach((stage, i) => {
         const color = stageColors[i % stageColors.length];
         
@@ -551,7 +545,7 @@ function createPlot(results) {
             x: [stage.x, stage.y],
             y: [stage.y, stage.y],
             mode: 'lines',
-            line: {color, width: 3},
+            line: {color: color, width: 2.5},
             showlegend: false,
             legendgroup: `stage_${i+1}`,
             xaxis: 'x2',
@@ -567,8 +561,8 @@ function createPlot(results) {
             marker: {
                 color: color,
                 size: 12,
-                symbol: ['circle', 'square'],
-                line: {color: 'white', width: 2}
+                symbol: ['circle', 'diamond'],
+                line: {color: 'white', width: 1.5}
             },
             hovertemplate: `<b>Stage ${i+1}</b><br>Liquid: x = %{x[0]:.3f}<br>Vapor: y = %{y[1]:.3f}<extra></extra>`,
             legendgroup: `stage_${i+1}`,
@@ -578,50 +572,67 @@ function createPlot(results) {
     });
     
     // ========== GARIS PROYEKSI VERTIKAL (NYAMBUNG) ==========
+    const y1_min = results.yMin;
+    const y1_max = results.yMax;
+    const y2_min = 0;
+    const y2_max = 1;
+    
     results.stage_compositions.forEach((stage, i) => {
         const color = stageColors[i % stageColors.length];
-        const idxLiq = Math.round(stage.x * 199);
-        const idxVap = Math.round(stage.y * 199);
-        const H_liq = results.HL_curve[idxLiq];
-        const H_vap = results.HV_curve[idxVap];
+        const x_liq = stage.x;
+        const y_liq = stage.y;
         
-        if (H_liq && H_vap) {
-            // Proyeksi liquid
+        // Cari enthalpy yang sesuai
+        const idxLiq = Math.round(x_liq * 199);
+        const idxVap = Math.round(y_liq * 199);
+        const H_liq_stage = results.HL_curve[idxLiq];
+        const H_vap_stage = results.HV_curve[idxVap];
+        
+        if (H_liq_stage && H_vap_stage) {
+            // Proyeksi liquid - dari titik VLE ke batas ATAS subplot VLE
             traces.push({
-                x: [stage.x, stage.x],
-                y: [stage.y, 1],
+                x: [x_liq, x_liq],
+                y: [y_liq, y2_max],
                 mode: 'lines',
+                line: {color: color, width: 1.8, dash: 'dot'},
                 showlegend: false,
-                line: {color, width: 2, dash: 'dot'},
+                legendgroup: `stage_${i+1}`,
                 xaxis: 'x2',
                 yaxis: 'y2'
             });
+            
+            // Dari batas BAWAH subplot H-x-y ke titik di kurva liquid
             traces.push({
-                x: [stage.x, stage.x],
-                y: [results.yMin, H_liq],
+                x: [x_liq, x_liq],
+                y: [y1_min, H_liq_stage],
                 mode: 'lines',
+                line: {color: color, width: 1.8, dash: 'dot'},
                 showlegend: false,
-                line: {color, width: 2, dash: 'dot'},
+                legendgroup: `stage_${i+1}`,
                 xaxis: 'x',
                 yaxis: 'y'
             });
             
-            // Proyeksi vapor
+            // Proyeksi vapor - dari titik VLE ke batas ATAS subplot VLE
             traces.push({
-                x: [stage.y, stage.y],
-                y: [stage.y, 1],
+                x: [y_liq, y_liq],
+                y: [y_liq, y2_max],
                 mode: 'lines',
+                line: {color: color, width: 1.8, dash: 'dot'},
                 showlegend: false,
-                line: {color, width: 2, dash: 'dot'},
+                legendgroup: `stage_${i+1}`,
                 xaxis: 'x2',
                 yaxis: 'y2'
             });
+            
+            // Dari batas BAWAH subplot H-x-y ke titik di kurva vapor
             traces.push({
-                x: [stage.y, stage.y],
-                y: [results.yMin, H_vap],
+                x: [y_liq, y_liq],
+                y: [y1_min, H_vap_stage],
                 mode: 'lines',
+                line: {color: color, width: 1.8, dash: 'dot'},
                 showlegend: false,
-                line: {color, width: 2, dash: 'dot'},
+                legendgroup: `stage_${i+1}`,
                 xaxis: 'x',
                 yaxis: 'y'
             });
@@ -634,17 +645,17 @@ function createPlot(results) {
         y: [null],
         mode: 'lines',
         name: 'Projection Lines',
-        line: {color: '#6C757D', width: 2, dash: 'dot'},
+        line: {color: '#6C757D', width: 1.8, dash: 'dot'},
         legendgroup: 'projection',
         xaxis: 'x',
         yaxis: 'y'
     });
     
-    // ========== LAYOUT ==========
+    // ========== LAYOUT - PERSIS KAYAK PYTHON ==========
     const layout = {
         title: {
             text: '<b>Ponchon–Savarit Diagram: Binary Distillation Analysis</b>',
-            font: {size: 20, family: 'Arial Black', color: '#1E1E1E'},
+            font: {size: 22, family: 'Arial Black', color: '#1E1E1E'},
             x: 0.5
         },
         grid: {
@@ -652,27 +663,30 @@ function createPlot(results) {
             columns: 1,
             pattern: 'independent',
             roworder: 'top to bottom'
+            // TIDAK PAKE subplot_titles - biar kosong
         },
         xaxis: {
             title: '<b>Mole Fraction (x or y)</b>',
             range: [0, 1],
             tickformat: '.2f',
-            tickfont: {size: 11},
-            titlefont: {size: 13},
+            tickfont: {size: 12, family: 'Arial'},
+            titlefont: {size: 14, family: 'Arial', color: '#1E1E1E'},
             gridcolor: '#E0E0E0',
+            gridwidth: 1,
             showline: true,
-            linewidth: 1,
+            linewidth: 1.5,
             linecolor: '#1E1E1E',
             mirror: true
         },
         yaxis: {
             title: '<b>Enthalpy (MJ/kmol)</b>',
             range: [results.yMin, results.yMax],
-            tickfont: {size: 11},
-            titlefont: {size: 13},
+            tickfont: {size: 12, family: 'Arial'},
+            titlefont: {size: 14, family: 'Arial', color: '#1E1E1E'},
             gridcolor: '#E0E0E0',
+            gridwidth: 1,
             showline: true,
-            linewidth: 1,
+            linewidth: 1.5,
             linecolor: '#1E1E1E',
             mirror: true
         },
@@ -680,11 +694,12 @@ function createPlot(results) {
             title: '<b>Mole Fraction (x or y)</b>',
             range: [0, 1],
             tickformat: '.2f',
-            tickfont: {size: 11},
-            titlefont: {size: 13},
+            tickfont: {size: 12, family: 'Arial'},
+            titlefont: {size: 14, family: 'Arial', color: '#1E1E1E'},
             gridcolor: '#E0E0E0',
+            gridwidth: 1,
             showline: true,
-            linewidth: 1,
+            linewidth: 1.5,
             linecolor: '#1E1E1E',
             mirror: true
         },
@@ -692,16 +707,17 @@ function createPlot(results) {
             title: '<b>y (Vapor Fraction)</b>',
             range: [0, 1],
             tickformat: '.2f',
-            tickfont: {size: 11},
-            titlefont: {size: 13},
+            tickfont: {size: 12, family: 'Arial'},
+            titlefont: {size: 14, family: 'Arial', color: '#1E1E1E'},
             gridcolor: '#E0E0E0',
+            gridwidth: 1,
             showline: true,
-            linewidth: 1,
+            linewidth: 1.5,
             linecolor: '#1E1E1E',
             mirror: true
         },
-        height: Math.max(700, window.innerHeight * 0.75),
-        width: document.querySelector('.main-content').clientWidth - 40,
+        height: 900,
+        width: document.querySelector('.main-content')?.clientWidth - 40 || 1000,
         showlegend: true,
         legend: {
             orientation: 'v',
@@ -709,27 +725,29 @@ function createPlot(results) {
             y: 0.98,
             xanchor: 'left',
             x: 1.02,
-            font: {size: 10},
-            bgcolor: 'rgba(255,255,255,0.95)',
+            font: {size: 11, family: 'Arial'},
+            bgcolor: 'rgba(255,255,255,0.9)',
             bordercolor: '#1E1E1E',
-            borderwidth: 1,
-            itemsizing: 'constant'
+            borderwidth: 1
         },
         hovermode: 'x unified',
-        hoverlabel: {bgcolor: 'white', font_size: 11},
+        hoverlabel: {
+            bgcolor: 'white',
+            font_size: 12,
+            font_family: 'Arial'
+        },
         template: 'plotly_white',
         plot_bgcolor: 'white',
         paper_bgcolor: 'white',
-        margin: {l: 70, r: 140, t: 80, b: 70}
+        margin: {l: 80, r: 150, t: 100, b: 80}
     };
     
     Plotly.newPlot('plotDiv', traces, layout, {responsive: true});
     
-    // Update ukuran plot saat window diresize
+    // Update ukuran saat window diresize
     window.addEventListener('resize', () => {
-        const containerWidth = document.querySelector('.main-content')?.clientWidth || 900;
+        const containerWidth = document.querySelector('.main-content')?.clientWidth || 1000;
         Plotly.relayout('plotDiv', {
-            height: Math.max(700, window.innerHeight * 0.75),
             width: containerWidth - 40
         });
     });
@@ -943,6 +961,7 @@ document.getElementById('exportBtn').addEventListener('click', function() {
 
 updatePreview();
 initPyodide();
+
 
 
 
