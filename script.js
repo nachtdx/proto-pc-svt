@@ -550,55 +550,60 @@ function createPlot(results) {
     
     // ========== GARIS PROYEKSI ==========
    // ========== GARIS PROYEKSI VERTIKAL (MULAI DARI KURVA) ==========
- results.stage_compositions.forEach((stage, i) => {
-        const color = stageColors[i % stageColors.length];
-        const idxLiq = Math.round(stage.x * 199);
-        const idxVap = Math.round(stage.y * 199);
-        const H_liq = results.HL_curve[idxLiq];
-        const H_vap = results.HV_curve[idxVap];
+// ========== GARIS PROYEKSI VERTIKAL (MULAI DARI KURVA) ==========
+results.stage_compositions.forEach((stage, i) => {
+    const color = stageColors[i % stageColors.length];
+    const x_liq = stage.x;
+    const y_liq = stage.y;
+    
+    // Cari enthalpy yang sesuai di KURVA
+    const idxLiq = Math.round(x_liq * 199);
+    const idxVap = Math.round(y_liq * 199);
+    const H_liq_stage = results.HL_curve[idxLiq];
+    const H_vap_stage = results.HV_curve[idxVap];
+    
+    if (H_liq_stage && H_vap_stage) {
+        // Proyeksi liquid
+        traces.push({
+            x: [x_liq, x_liq],
+            y: [H_liq_stage, results.yMin],
+            mode: 'lines',
+            showlegend: false,
+            line: {color, width: 1.8, dash: 'dot'},
+            xaxis: 'x',
+            yaxis: 'y'
+        });
+        traces.push({
+            x: [x_liq, x_liq],
+            y: [1.0, y_liq],
+            mode: 'lines',
+            showlegend: false,
+            line: {color, width: 1.8, dash: 'dot'},
+            xaxis: 'x2',
+            yaxis: 'y2'
+        });
         
-        if (H_liq && H_vap) {
-            // Proyeksi liquid
-            traces.push({
-                x: [stage.x, stage.x],
-                y: [stage.y, 1],
-                mode: 'lines',
-                showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'},
-                xaxis: 'x2',
-                yaxis: 'y2'
-            });
-            traces.push({
-                x: [stage.x, stage.x],
-                y: [results.yMin, H_liq],
-                mode: 'lines',
-                showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'},
-                xaxis: 'x',
-                yaxis: 'y'
-            });
-            
-            // Proyeksi vapor
-            traces.push({
-                x: [stage.y, stage.y],
-                y: [stage.y, 1],
-                mode: 'lines',
-                showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'},
-                xaxis: 'x2',
-                yaxis: 'y2'
-            });
-            traces.push({
-                x: [stage.y, stage.y],
-                y: [results.yMin, H_vap],
-                mode: 'lines',
-                showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'},
-                xaxis: 'x',
-                yaxis: 'y'
-            });
-        }
-    });
+        // Proyeksi vapor
+        traces.push({
+            x: [y_liq, y_liq],
+            y: [H_vap_stage, results.yMin],
+            mode: 'lines',
+            showlegend: false,
+            line: {color, width: 1.8, dash: 'dot'},
+            xaxis: 'x',
+            yaxis: 'y'
+        });
+        traces.push({
+            x: [y_liq, y_liq],
+            y: [1.0, y_liq],
+            mode: 'lines',
+            showlegend: false,
+            line: {color, width: 1.8, dash: 'dot'},
+            xaxis: 'x2',
+            yaxis: 'y2'
+        });
+    }
+});
     
     // ========== LAYOUT ==========
 const layout = {
@@ -813,6 +818,7 @@ document.getElementById('exportBtn').addEventListener('click', function() {
 
 updatePreview();
 initPyodide();
+
 
 
 
