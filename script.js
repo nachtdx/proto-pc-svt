@@ -683,7 +683,7 @@ const layout = {
         borderwidth: 1
     },
     // Ukuran plot
-    height: 800,
+    height: 700,
     width: document.querySelector('.main-content')?.clientWidth - 40 || 1000
 };
 
@@ -848,6 +848,7 @@ document.getElementById('exportBtn').addEventListener('click', function() {
 
 updatePreview();
 initPyodide();
+
 
 
 
