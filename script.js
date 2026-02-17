@@ -1,6 +1,4 @@
 // script.js
-// Tambahin di awal script
-
 // ==========================================
 // STATE & VARIABLES GLOBAL
 // ==========================================
@@ -656,9 +654,6 @@ function displayResults(results) {
 }
 
 // ==========================================
-// INITIALIZE PYODIDE (SATU FUNGSI INI DOANG!)
-// ==========================================
-// ==========================================
 // INITIALIZE PYODIDE (VERSI 0.23.4)
 // ==========================================
 async function initPyodide() {
@@ -677,34 +672,28 @@ async function initPyodide() {
         progressBar.innerText = '20%';
         statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading Python...';
         
-        // PAKE VERSI 0.23.4 (sesuai CDN)
         pyodide = await loadPyodide({
             indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/"
         });
         
-        // Step 2: Load packages satu-satu dengan retry
-        const packages = ['numpy', 'scipy', 'pandas'];
-        for (let i = 0; i < packages.length; i++) {
-            const pkg = packages[i];
-            statusText.innerText = `Loading ${pkg}...`;
-            progressBar.style.width = `${30 + i*20}%`;
-            progressBar.innerText = `${30 + i*20}%`;
-            statusDiv.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Loading ${pkg}...`;
-            
-            let retry = 3;
-            while (retry > 0) {
-                try {
-                    await pyodide.loadPackage(pkg);
-                    console.log(`✅ ${pkg} loaded`);
-                    break;
-                } catch (e) {
-                    retry--;
-                    if (retry === 0) throw e;
-                    console.log(`Retry ${pkg}... (${retry} left)`);
-                    await new Promise(r => setTimeout(r, 1000));
-                }
-            }
-        }
+        // Step 2: Load packages
+        statusText.innerText = 'Loading numpy...';
+        progressBar.style.width = '40%';
+        progressBar.innerText = '40%';
+        statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading numpy...';
+        await pyodide.loadPackage('numpy');
+        
+        statusText.innerText = 'Loading scipy...';
+        progressBar.style.width = '60%';
+        progressBar.innerText = '60%';
+        statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading scipy...';
+        await pyodide.loadPackage('scipy');
+        
+        statusText.innerText = 'Loading pandas...';
+        progressBar.style.width = '80%';
+        progressBar.innerText = '80%';
+        statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading pandas...';
+        await pyodide.loadPackage('pandas');
         
         // Step 3: Load calculator
         statusText.innerText = 'Initializing calculator...';
@@ -741,7 +730,10 @@ async function initPyodide() {
 
 // Preview update
 ['xData', 'yData', 'Hl', 'Hv'].forEach(id => {
-    document.getElementById(id).addEventListener('input', updatePreview);
+    const element = document.getElementById(id);
+    if (element) {
+        element.addEventListener('input', updatePreview);
+    }
 });
 
 // Custom q handling
@@ -851,8 +843,5 @@ document.getElementById('exportBtn').addEventListener('click', function() {
 // Initial preview
 updatePreview();
 
-// Initialize Pyodide - PANGGIL SEKALI!
+// Initialize Pyodide
 initPyodide();
-
-
-
