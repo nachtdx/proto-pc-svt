@@ -550,18 +550,6 @@ function createPlot(results) {
     
     // ========== GARIS PROYEKSI ==========
    // ========== GARIS PROYEKSI VERTIKAL (MULAI DARI KURVA) ==========
-results.stage_compositions.forEach((stage, i) => {
-    const color = stageColors[i % stageColors.length];
-    const x_liq = stage.x;
-    const y_liq = stage.y;
-    
-    // Cari enthalpy yang sesuai di KURVA (bukan titik VLE)
-    const idxLiq = Math.round(x_liq * 199);
-    const idxVap = Math.round(y_liq * 199);
-    const H_liq_stage = results.HL_curve[idxLiq];  // Enthalpy di kurva liquid
-    const H_vap_stage = results.HV_curve[idxVap];  // Enthalpy di kurva vapor
-    
-    if (H_liq_stage && H_vap_stage) {
  results.stage_compositions.forEach((stage, i) => {
         const color = stageColors[i % stageColors.length];
         const idxLiq = Math.round(stage.x * 199);
@@ -825,6 +813,7 @@ document.getElementById('exportBtn').addEventListener('click', function() {
 
 updatePreview();
 initPyodide();
+
 
 
 
