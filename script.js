@@ -524,8 +524,9 @@ function displayResults(results) {
     currentResults = results;
 }
 
+
 // ==========================================
-// INITIALIZE PYODIDE
+// INITIALIZE PYODIDE - VERSI FIX (LOADING PAGE NYALA)
 // ==========================================
 async function initPyodide() {
     const loadingDiv = document.getElementById('pyodide-loading');
@@ -534,49 +535,79 @@ async function initPyodide() {
     const statusDiv = document.getElementById('pyodide-status');
     const calculateBtn = document.getElementById('calculateBtn');
     
+    // Pastiin loading div muncul
     loadingDiv.style.display = 'flex';
+    statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading Python...';
+    statusText.innerText = 'Starting...';
+    progressBar.style.width = '0%';
+    progressBar.innerText = '0%';
     
     try {
+        // Step 1: Load Pyodide core
         statusText.innerText = 'Loading Pyodide core...';
-        progressBar.style.width = '20%'; progressBar.innerText = '20%';
-        statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading Python...';
+        progressBar.style.width = '20%';
+        progressBar.innerText = '20%';
+        statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading Python core...';
+        console.log('Loading Pyodide core...');
         
-        pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/" });
+        pyodide = await loadPyodide({
+            indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/"
+        });
+        console.log('✅ Pyodide core loaded');
         
+        // Step 2: Load packages satu per satu dengan array
         statusText.innerText = 'Loading numpy...';
-        progressBar.style.width = '40%'; progressBar.innerText = '40%';
+        progressBar.style.width = '40%';
+        progressBar.innerText = '40%';
         statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading numpy...';
-        await pyodide.loadPackage('numpy');
+        await pyodide.loadPackage(['numpy']);
+        console.log('✅ numpy loaded');
         
         statusText.innerText = 'Loading scipy...';
-        progressBar.style.width = '60%'; progressBar.innerText = '60%';
+        progressBar.style.width = '60%';
+        progressBar.innerText = '60%';
         statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading scipy...';
-        await pyodide.loadPackage('scipy');
+        await pyodide.loadPackage(['scipy']);
+        console.log('✅ scipy loaded');
         
         statusText.innerText = 'Loading pandas...';
-        progressBar.style.width = '80%'; progressBar.innerText = '80%';
+        progressBar.style.width = '80%';
+        progressBar.innerText = '80%';
         statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading pandas...';
-        await pyodide.loadPackage('pandas');
+        await pyodide.loadPackage(['pandas']);
+        console.log('✅ pandas loaded');
         
+        // Step 3: Load calculator
         statusText.innerText = 'Initializing calculator...';
-        progressBar.style.width = '90%'; progressBar.innerText = '90%';
+        progressBar.style.width = '90%';
+        progressBar.innerText = '90%';
         statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading calculator...';
         await loadCalculatorCode();
         
-        progressBar.style.width = '100%'; progressBar.innerText = '100%';
+        // Selesai
+        progressBar.style.width = '100%';
+        progressBar.innerText = '100%';
         statusText.innerText = 'Ready!';
-        statusDiv.innerHTML = '<i class="fas fa-check-circle text-success"></i> Python ready!';
+        statusDiv.innerHTML = '<i class="fas fa-check-circle text-success"></i> Python environment ready!';
         pyodideReady = true;
         calculateBtn.disabled = false;
         
-        setTimeout(() => loadingDiv.style.display = 'none', 500);
-        console.log('✅ Pyodide siap!');
+        // Hilangin loading setelah 500ms
+        setTimeout(() => {
+            loadingDiv.style.display = 'none';
+        }, 500);
+        
+        console.log('✅ Pyodide siap digunakan!');
         
     } catch (error) {
-        console.error('Error:', error);
-        statusText.innerText = 'Error loading Python';
+        console.error('Error loading Pyodide:', error);
+        statusText.innerText = 'Error loading Python environment';
         statusDiv.innerHTML = `<i class="fas fa-exclamation-circle text-danger"></i> Error: ${error.message}`;
-        loadingDiv.style.display = 'none';
+        
+        // Tetap hilangin loading biar gak stuck
+        setTimeout(() => {
+            loadingDiv.style.display = 'none';
+        }, 2000);
     }
 }
 
@@ -650,3 +681,4 @@ document.getElementById('exportBtn').addEventListener('click', function() {
 
 updatePreview();
 initPyodide();
+
