@@ -1,10 +1,6 @@
 // script.js
 // Tambahin di awal script
-const startTime = Date.now();
 
-// Di dalem initPyodide(), update setiap step
-const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-document.getElementById('connection-speed').innerText = `${elapsed} detik`;
 // ==========================================
 // STATE & VARIABLES GLOBAL
 // ==========================================
@@ -846,4 +842,5 @@ updatePreview();
 
 // Initialize Pyodide - PANGGIL SEKALI!
 initPyodide();
+
 
