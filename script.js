@@ -613,70 +613,57 @@ results.stage_compositions.forEach((stage, i) => {
     });
     
     // ========== LAYOUT ==========
-    const layout = {
-        title: {
-            text: '<b>Ponchon–Savarit Diagram: Binary Distillation Analysis</b>',
-            font: {size: 20, family: 'Arial Black', color: '#1E1E1E'},
-            x: 0.5
-        },
-        grid: {
-            rows: 2,
-            columns: 1,
-            pattern: 'independent',
-            roworder: 'top to bottom'
-        },
-        xaxis: {
-            title: '<b>Mole Fraction (x or y)</b>',
-            range: [0, 1],
-            tickformat: '.2f',
-            tickfont: {size: 11},
-            titlefont: {size: 13},
-            gridcolor: '#E0E0E0'
-        },
-        yaxis: {
-            title: '<b>Enthalpy (MJ/kmol)</b>',
-            range: [results.yMin, results.yMax],
-            tickfont: {size: 11},
-            titlefont: {size: 13},
-            gridcolor: '#E0E0E0'
-        },
-        xaxis2: {
-            title: '<b>Mole Fraction (x or y)</b>',
-            range: [0, 1],
-            tickformat: '.2f',
-            tickfont: {size: 11},
-            titlefont: {size: 13},
-            gridcolor: '#E0E0E0'
-        },
-        yaxis2: {
-            title: '<b>y (Vapor Fraction)</b>',
-            range: [0, 1],
-            tickformat: '.2f',
-            tickfont: {size: 11},
-            titlefont: {size: 13},
-            gridcolor: '#E0E0E0'
-        },
-        height: 800,
-        width: document.querySelector('.main-content')?.clientWidth - 40 || 900,
-        showlegend: true,
-        legend: {
-            orientation: 'v',
-            yanchor: 'top',
-            y: 0.98,
-            xanchor: 'left',
-            x: 1.02,
-            font: {size: 10},
-            bgcolor: 'rgba(255,255,255,0.9)',
-            bordercolor: '#1E1E1E',
-            borderwidth: 1
-        },
-        hovermode: 'x unified',
-        hoverlabel: {bgcolor: 'white', font_size: 11},
-        template: 'plotly_white',
-        plot_bgcolor: 'white',
-        paper_bgcolor: 'white',
-        margin: {l: 70, r: 140, t: 80, b: 70}
-    };
+const layout = {
+    title: {
+        text: '<b>Ponchon–Savarit Diagram: Binary Distillation Analysis</b>',
+        font: {size: 18, family: 'Arial', color: '#1E1E1E'},
+        x: 0.5
+    },
+    grid: {
+        rows: 2,
+        columns: 1,
+        pattern: 'independent',
+        roworder: 'top to bottom'
+    },
+    // MARGIN KECIL
+    margin: {
+        l: 60,   // kiri
+        r: 100,  // kanan
+        t: 50,   // atas
+        b: 50,   // bawah
+        pad: 0
+    },
+    xaxis: {
+        domain: [0.1, 0.9],
+        title: '<b>Mole Fraction (x or y)</b>',
+        range: [0, 1],
+        tickformat: '.2f',
+        tickfont: {size: 10},
+        titlefont: {size: 12}
+    },
+    yaxis: {
+        domain: [0.52, 0.95],  // <-- SUBPLOT ATAS (NEMPEL KE SUBPLOT BAWAH)
+        title: '<b>Enthalpy (MJ/kmol)</b>',
+        range: [results.yMin, results.yMax],
+        tickfont: {size: 10},
+        titlefont: {size: 12}
+    },
+    xaxis2: {
+        domain: [0.1, 0.9],
+        title: '<b>Mole Fraction (x or y)</b>',
+        range: [0, 1],
+        tickformat: '.2f',
+        tickfont: {size: 10},
+        titlefont: {size: 12}
+    },
+    yaxis2: {
+        domain: [0.05, 0.48],  // <-- SUBPLOT BAWAH (NEMPEL KE SUBPLOT ATAS)
+        title: '<b>y (Vapor Fraction)</b>',
+        range: [0, 1],
+        tickfont: {size: 10},
+        titlefont: {size: 12}
+    }
+};
     
     Plotly.newPlot('plotDiv', traces, layout, {responsive: true});
     
@@ -838,5 +825,6 @@ document.getElementById('exportBtn').addEventListener('click', function() {
 
 updatePreview();
 initPyodide();
+
 
 
