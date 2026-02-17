@@ -549,66 +549,52 @@ function createPlot(results) {
     });
     
     // ========== GARIS PROYEKSI ==========
-    results.stage_compositions.forEach((stage, i) => {
-        const color = stageColors[i % stageColors.length];
-        const idxLiq = Math.round(stage.x * 199);
-        const idxVap = Math.round(stage.y * 199);
-        const H_liq = results.HL_curve[idxLiq];
-        const H_vap = results.HV_curve[idxVap];
-        
-        if (H_liq && H_vap) {
-            // Proyeksi liquid
-            traces.push({
-                x: [stage.x, stage.x],
-                y: [stage.y, 1],
-                mode: 'lines',
-                showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'},
-                xaxis: 'x2',
-                yaxis: 'y2'
-            });
-            traces.push({
-                x: [stage.x, stage.x],
-                y: [results.yMin, H_liq],
-                mode: 'lines',
-                showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'},
-                xaxis: 'x',
-                yaxis: 'y'
-            });
-            
-            // Proyeksi vapor
-            traces.push({
-                x: [stage.y, stage.y],
-                y: [stage.y, 1],
-                mode: 'lines',
-                showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'},
-                xaxis: 'x2',
-                yaxis: 'y2'
-            });
-            traces.push({
-                x: [stage.y, stage.y],
-                y: [results.yMin, H_vap],
-                mode: 'lines',
-                showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'},
-                xaxis: 'x',
-                yaxis: 'y'
-            });
-        }
-    });
+   // ========== GARIS PROYEKSI VERTIKAL (MULAI DARI KURVA) ==========
+results.stage_compositions.forEach((stage, i) => {
+    const color = stageColors[i % stageColors.length];
+    const x_liq = stage.x;
+    const y_liq = stage.y;
     
-    // Legend untuk projection lines
-    traces.push({
-        x: [null],
-        y: [null],
-        mode: 'lines',
-        name: 'Projection Lines',
-        line: {color: '#6C757D', width: 1.8, dash: 'dot'},
-        xaxis: 'x',
-        yaxis: 'y'
-    });
+    // Cari enthalpy yang sesuai di KURVA (bukan titik VLE)
+    const idxLiq = Math.round(x_liq * 199);
+    const idxVap = Math.round(y_liq * 199);
+    const H_liq_stage = results.HL_curve[idxLiq];  // Enthalpy di kurva liquid
+    const H_vap_stage = results.HV_curve[idxVap];  // Enthalpy di kurva vapor
+    
+    if (H_liq_stage && H_vap_stage) {
+        // ===== GARIS PROYEKSI UNTUK LIQUID =====
+        // Mulai dari KURVA LIQUID (H_liq_stage) di subplot atas
+        // Turun ke batas bawah subplot atas (yMin)
+        // Lanjut ke batas atas subplot bawah (1.0)
+        // Turun ke titik di VLE (y_liq)
+        traces.push({
+            x: [x_liq, x_liq, x_liq, x_liq],
+            y: [H_liq_stage, results.yMin, 1.0, y_liq],
+            mode: 'lines',
+            line: {color: color, width: 2, dash: 'dot'},
+            showlegend: false,
+            xaxis: 'x',      // Mulai di subplot atas
+            yaxis: 'y',
+            connectgaps: true
+        });
+        
+        // ===== GARIS PROYEKSI UNTUK VAPOR =====
+        // Mulai dari KURVA VAPOR (H_vap_stage) di subplot atas
+        // Turun ke batas bawah subplot atas (yMin)
+        // Lanjut ke batas atas subplot bawah (1.0)
+        // Turun ke titik di VLE (y_liq)
+        traces.push({
+            x: [y_liq, y_liq, y_liq, y_liq],
+            y: [H_vap_stage, results.yMin, 1.0, y_liq],
+            mode: 'lines',
+            line: {color: color, width: 2, dash: 'dot'},
+            showlegend: false,
+            xaxis: 'x',      // Mulai di subplot atas
+            yaxis: 'y',
+            connectgaps: true
+        });
+    }
+});
     
     // ========== LAYOUT ==========
     const layout = {
@@ -836,3 +822,4 @@ document.getElementById('exportBtn').addEventListener('click', function() {
 
 updatePreview();
 initPyodide();
+
