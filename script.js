@@ -562,39 +562,55 @@ results.stage_compositions.forEach((stage, i) => {
     const H_vap_stage = results.HV_curve[idxVap];  // Enthalpy di kurva vapor
     
     if (H_liq_stage && H_vap_stage) {
-        // ===== GARIS PROYEKSI UNTUK LIQUID =====
-        // Mulai dari KURVA LIQUID (H_liq_stage) di subplot atas
-        // Turun ke batas bawah subplot atas (yMin)
-        // Lanjut ke batas atas subplot bawah (1.0)
-        // Turun ke titik di VLE (y_liq)
-        traces.push({
-            x: [x_liq, x_liq, x_liq, x_liq],
-            y: [H_liq_stage, results.yMin, 1.0, y_liq],
-            mode: 'lines',
-            line: {color: color, width: 2, dash: 'dot'},
-            showlegend: false,
-            xaxis: 'x',      // Mulai di subplot atas
-            yaxis: 'y',
-            connectgaps: true
-        });
+ results.stage_compositions.forEach((stage, i) => {
+        const color = stageColors[i % stageColors.length];
+        const idxLiq = Math.round(stage.x * 199);
+        const idxVap = Math.round(stage.y * 199);
+        const H_liq = results.HL_curve[idxLiq];
+        const H_vap = results.HV_curve[idxVap];
         
-        // ===== GARIS PROYEKSI UNTUK VAPOR =====
-        // Mulai dari KURVA VAPOR (H_vap_stage) di subplot atas
-        // Turun ke batas bawah subplot atas (yMin)
-        // Lanjut ke batas atas subplot bawah (1.0)
-        // Turun ke titik di VLE (y_liq)
-        traces.push({
-            x: [y_liq, y_liq, y_liq, y_liq],
-            y: [H_vap_stage, results.yMin, 1.0, y_liq],
-            mode: 'lines',
-            line: {color: color, width: 2, dash: 'dot'},
-            showlegend: false,
-            xaxis: 'x',      // Mulai di subplot atas
-            yaxis: 'y',
-            connectgaps: true
-        });
-    }
-});
+        if (H_liq && H_vap) {
+            // Proyeksi liquid
+            traces.push({
+                x: [stage.x, stage.x],
+                y: [stage.y, 1],
+                mode: 'lines',
+                showlegend: false,
+                line: {color, width: 1.8, dash: 'dot'},
+                xaxis: 'x2',
+                yaxis: 'y2'
+            });
+            traces.push({
+                x: [stage.x, stage.x],
+                y: [results.yMin, H_liq],
+                mode: 'lines',
+                showlegend: false,
+                line: {color, width: 1.8, dash: 'dot'},
+                xaxis: 'x',
+                yaxis: 'y'
+            });
+            
+            // Proyeksi vapor
+            traces.push({
+                x: [stage.y, stage.y],
+                y: [stage.y, 1],
+                mode: 'lines',
+                showlegend: false,
+                line: {color, width: 1.8, dash: 'dot'},
+                xaxis: 'x2',
+                yaxis: 'y2'
+            });
+            traces.push({
+                x: [stage.y, stage.y],
+                y: [results.yMin, H_vap],
+                mode: 'lines',
+                showlegend: false,
+                line: {color, width: 1.8, dash: 'dot'},
+                xaxis: 'x',
+                yaxis: 'y'
+            });
+        }
+    });
     
     // ========== LAYOUT ==========
     const layout = {
@@ -822,4 +838,5 @@ document.getElementById('exportBtn').addEventListener('click', function() {
 
 updatePreview();
 initPyodide();
+
 
