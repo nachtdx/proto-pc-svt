@@ -608,12 +608,13 @@ results.stage_compositions.forEach((stage, i) => {
     // ========== LAYOUT ==========
 // ========== LAYOUT - SUBPLOT MEPET + TITLE X ATAS DIHAPUS ==========
 // ========== LAYOUT - SUBPLOT CONCATENATED ==========
+// ========== LAYOUT - SUBPLOT NEMPEL BENERAN ==========
 const layout = {
     title: {
         text: '<b>Ponchon–Savarit Diagram: Binary Distillation Analysis</b>',
-        font: {size: 18, family: 'Arial', color: '#1E1E1E'},
+        font: {size: 16, family: 'Arial', color: '#1E1E1E'},
         x: 0.5,
-        y: 0.98  // Title agak naik
+        y: 0.98
     },
     grid: {
         rows: 2,
@@ -622,64 +623,70 @@ const layout = {
         roworder: 'top to bottom'
     },
     margin: {
-        l: 70,   // kiri
-        r: 130,  // kanan (buat legend)
-        t: 50,   // atas dikit
-        b: 70,   // bawah agak besar biar ga nutup
+        l: 60,
+        r: 100,
+        t: 40,
+        b: 50,
         pad: 0
     },
     xaxis: {
         domain: [0.1, 0.9],
-        title: '',  // No title
+        title: '',
         range: [0, 1],
         tickformat: '.2f',
-        tickfont: {size: 10},
+        tickfont: {size: 9},
         showline: true,
         linecolor: '#1E1E1E',
-        mirror: true
+        mirror: 'allticks',
+        ticks: 'outside'
     },
     yaxis: {
-        domain: [0.5, 0.95],  // Subplot atas (50% ke atas)
+        domain: [0.5, 0.95],  // <-- DARI TENGAH KE ATAS
         title: '<b>Enthalpy (MJ/kmol)</b>',
         range: [results.yMin, results.yMax],
-        tickfont: {size: 10},
-        titlefont: {size: 12},
+        tickfont: {size: 9},
+        titlefont: {size: 11},
         showline: true,
         linecolor: '#1E1E1E',
-        mirror: true
+        mirror: 'allticks',
+        ticks: 'outside'
     },
     xaxis2: {
         domain: [0.1, 0.9],
         title: '<b>Mole Fraction (x or y)</b>',
         range: [0, 1],
         tickformat: '.2f',
-        tickfont: {size: 10},
-        titlefont: {size: 12},
+        tickfont: {size: 9},
+        titlefont: {size: 11},
         showline: true,
         linecolor: '#1E1E1E',
-        mirror: true
+        mirror: 'allticks',
+        ticks: 'outside'
     },
     yaxis2: {
-        domain: [0.05, 0.45],  // Subplot bawah (5% ke 45%)
+        domain: [0.05, 0.45],  // <-- DARI BAWAH KE TENGAH
         title: '<b>y (Vapor Fraction)</b>',
         range: [0, 1],
-        tickfont: {size: 10},
-        titlefont: {size: 12},
+        tickfont: {size: 9},
+        titlefont: {size: 11},
         showline: true,
         linecolor: '#1E1E1E',
-        mirror: true
+        mirror: 'allticks',
+        ticks: 'outside'
     },
-    // Legend di kanan
     legend: {
         x: 1.02,
         y: 1,
         xanchor: 'left',
         yanchor: 'top',
-        font: {size: 9},
+        font: {size: 8},
         bgcolor: 'rgba(255,255,255,0.9)',
         bordercolor: '#1E1E1E',
         borderwidth: 1
     },
+    height: 700,
+    width: document.querySelector('.main-content')?.clientWidth - 40 || 900
+};
     // Ukuran plot
     height: 800,
     width: document.querySelector('.main-content')?.clientWidth - 40 || 1000
@@ -844,6 +851,7 @@ document.getElementById('exportBtn').addEventListener('click', function() {
 
 updatePreview();
 initPyodide();
+
 
 
 
