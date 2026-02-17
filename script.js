@@ -304,95 +304,280 @@ async function runCalculation(inputData) {
 // ==========================================
 // CREATE PLOT - PONCHON-SAVARIT ELEGAN (RESPONSIVE)
 // ==========================================
+// ==========================================
+// CREATE PLOT - PONCHON-SAVARIT (SUBPOLOT MEPET, PROYEKSI NYAMBUNG)
+// ==========================================
 function createPlot(results) {
-    const stageColors = ['#FF6B6B', '#4ECDC4', '#FF9F1C', '#6A4C93', '#2E86AB', 
-                         '#A23B72', '#F18F01', '#2D6A4F', '#9E2A2B', '#540D6E'];
+    const stageColors = [
+        '#FF6B6B', '#4ECDC4', '#FF9F1C', '#6A4C93', '#2E86AB', 
+        '#A23B72', '#F18F01', '#2D6A4F', '#9E2A2B', '#540D6E',
+        '#FF8C42', '#3A6EA5', '#C44545', '#6A8D73', '#B83B5E'
+    ];
     
     const traces = [];
     
     // ========== KURVA DASAR H-x-y ==========
-    traces.push({ x: results.x_range, y: results.HL_curve, mode: 'lines', 
-        name: 'Saturated Liquid', line: {color: '#2E86AB', width: 4}, xaxis: 'x', yaxis: 'y' });
-    traces.push({ x: results.x_range, y: results.HV_curve, mode: 'lines', 
-        name: 'Saturated Vapor', line: {color: '#A23B72', width: 4}, xaxis: 'x', yaxis: 'y' });
+    traces.push({
+        x: results.x_range,
+        y: results.HL_curve,
+        mode: 'lines',
+        name: 'Saturated Liquid',
+        line: {color: '#2E86AB', width: 4},
+        legendgroup: 'curves',
+        xaxis: 'x',
+        yaxis: 'y'
+    });
     
-    // ========== GARIS VERTIKAL ==========
-    traces.push({ x: [results.xD, results.xD], y: [results.yMin, results.yMax], mode: 'lines', 
-        name: 'x<sub>D</sub>', line: {color: '#6C757D', width: 2.5, dash: 'dash'}, xaxis: 'x', yaxis: 'y' });
-    traces.push({ x: [results.xD, results.xD], y: [0, 1], mode: 'lines', 
-        showlegend: false, line: {color: '#6C757D', width: 2.5, dash: 'dash'}, xaxis: 'x2', yaxis: 'y2' });
+    traces.push({
+        x: results.x_range,
+        y: results.HV_curve,
+        mode: 'lines',
+        name: 'Saturated Vapor',
+        line: {color: '#A23B72', width: 4},
+        legendgroup: 'curves',
+        xaxis: 'x',
+        yaxis: 'y'
+    });
     
-    traces.push({ x: [results.xB, results.xB], y: [results.yMin, results.yMax], mode: 'lines', 
-        name: 'x<sub>B</sub>', line: {color: '#6C757D', width: 2.5, dash: 'dash'}, xaxis: 'x', yaxis: 'y' });
-    traces.push({ x: [results.xB, results.xB], y: [0, 1], mode: 'lines', 
-        showlegend: false, line: {color: '#6C757D', width: 2.5, dash: 'dash'}, xaxis: 'x2', yaxis: 'y2' });
+    // ========== GARIS VERTIKAL (MEMBENTANG DI KEDUA SUBPLOT) ==========
+    // xD
+    traces.push({
+        x: [results.xD, results.xD],
+        y: [results.yMin, results.yMax],
+        mode: 'lines',
+        name: 'x<sub>D</sub>',
+        line: {color: '#6C757D', width: 2.5, dash: 'dash'},
+        legendgroup: 'verticals',
+        xaxis: 'x',
+        yaxis: 'y'
+    });
+    traces.push({
+        x: [results.xD, results.xD],
+        y: [0, 1],
+        mode: 'lines',
+        showlegend: false,
+        line: {color: '#6C757D', width: 2.5, dash: 'dash'},
+        xaxis: 'x2',
+        yaxis: 'y2'
+    });
     
-    traces.push({ x: [results.zF, results.zF], y: [results.yMin, results.yMax], mode: 'lines', 
-        name: 'z<sub>F</sub>', line: {color: '#2D6A4F', width: 3, dash: 'dash'}, xaxis: 'x', yaxis: 'y' });
-    traces.push({ x: [results.zF, results.zF], y: [0, 1], mode: 'lines', 
-        showlegend: false, line: {color: '#2D6A4F', width: 3, dash: 'dash'}, xaxis: 'x2', yaxis: 'y2' });
+    // xB
+    traces.push({
+        x: [results.xB, results.xB],
+        y: [results.yMin, results.yMax],
+        mode: 'lines',
+        name: 'x<sub>B</sub>',
+        line: {color: '#6C757D', width: 2.5, dash: 'dash'},
+        legendgroup: 'verticals',
+        xaxis: 'x',
+        yaxis: 'y'
+    });
+    traces.push({
+        x: [results.xB, results.xB],
+        y: [0, 1],
+        mode: 'lines',
+        showlegend: false,
+        line: {color: '#6C757D', width: 2.5, dash: 'dash'},
+        xaxis: 'x2',
+        yaxis: 'y2'
+    });
+    
+    // zF (Feed)
+    traces.push({
+        x: [results.zF, results.zF],
+        y: [results.yMin, results.yMax],
+        mode: 'lines',
+        name: 'z<sub>F</sub> (Feed)',
+        line: {color: '#2D6A4F', width: 3, dash: 'dash'},
+        legendgroup: 'verticals',
+        xaxis: 'x',
+        yaxis: 'y'
+    });
+    traces.push({
+        x: [results.zF, results.zF],
+        y: [0, 1],
+        mode: 'lines',
+        showlegend: false,
+        line: {color: '#2D6A4F', width: 3, dash: 'dash'},
+        xaxis: 'x2',
+        yaxis: 'y2'
+    });
     
     // ========== DIFFERENCE POINTS ==========
-    traces.push({ x: [results.xDeltaR, results.xDeltaS], y: [results.HDeltaR, results.HDeltaS], 
-        mode: 'markers+text', name: 'Difference Points', 
-        marker: {color: '#F97316', size: 14, symbol: 'star', line: {color: 'white', width: 1}},
-        text: ['Δ<sub>R</sub>', 'Δ<sub>S</sub>'], textposition: ['top center', 'bottom center'],
-        textfont: {size: 14, color: '#F97316', family: 'Arial Black'}, xaxis: 'x', yaxis: 'y' });
+    traces.push({
+        x: [results.xDeltaR, results.xDeltaS],
+        y: [results.HDeltaR, results.HDeltaS],
+        mode: 'markers+text',
+        name: 'Difference Points',
+        marker: {
+            color: '#F97316', 
+            size: 16, 
+            symbol: 'star', 
+            line: {color: 'white', width: 2}
+        },
+        text: ['Δ<sub>R</sub>', 'Δ<sub>S</sub>'],
+        textposition: ['top center', 'bottom center'],
+        textfont: {size: 14, color: '#F97316', family: 'Arial Black'},
+        legendgroup: 'points',
+        xaxis: 'x',
+        yaxis: 'y'
+    });
     
     // ========== OPERATING LINE ==========
-    traces.push({ x: [results.xDeltaR, results.zF, results.xDeltaS], y: [results.HDeltaR, results.HF, results.HDeltaS], 
-        mode: 'lines+markers', name: 'Operating Line', line: {color: '#0A9396', width: 3},
-        marker: {size: 8, color: '#0A9396', line: {color: 'white', width: 1}}, xaxis: 'x', yaxis: 'y' });
+    traces.push({
+        x: [results.xDeltaR, results.zF, results.xDeltaS],
+        y: [results.HDeltaR, results.HF, results.HDeltaS],
+        mode: 'lines+markers',
+        name: 'Operating Line',
+        line: {color: '#0A9396', width: 3.5},
+        marker: {size: 10, color: '#0A9396', symbol: 'circle', line: {color: 'white', width: 1}},
+        legendgroup: 'lines',
+        xaxis: 'x',
+        yaxis: 'y'
+    });
     
     // ========== MINIMUM REFLUX LINE ==========
-    traces.push({ x: [results.xB, results.zF, results.yFMin, results.xD], 
-        y: [results.QDoublePrimeMin, results.HF, results.HVyF, results.QPrimeMin], 
-        mode: 'lines+markers', name: 'Minimum Reflux Line', line: {color: '#E9C46A', width: 2.5, dash: 'dash'},
-        marker: {size: 8, color: '#E9C46A', line: {color: 'white', width: 1}}, xaxis: 'x', yaxis: 'y' });
+    traces.push({
+        x: [results.xB, results.zF, results.yFMin, results.xD],
+        y: [results.QDoublePrimeMin, results.HF, results.HVyF, results.QPrimeMin],
+        mode: 'lines+markers',
+        name: 'Minimum Reflux Line',
+        line: {color: '#E9C46A', width: 3, dash: 'dash'},
+        marker: {size: 10, color: '#E9C46A', symbol: 'diamond', line: {color: 'white', width: 1}},
+        legendgroup: 'lines',
+        xaxis: 'x',
+        yaxis: 'y'
+    });
     
-    traces.push({ x: [results.xD, results.xB], y: [results.QPrimeMin, results.QDoublePrimeMin], 
-        mode: 'markers+text', name: 'Min Diff Points',
-        marker: {color: '#E9C46A', size: 12, symbol: 'star-diamond', line: {color: 'white', width: 1}},
-        text: ['Δ<sub>R,min</sub>', 'Δ<sub>S,min</sub>'], textposition: ['middle left', 'middle right'],
-        textfont: {size: 12, color: '#E9C46A'}, xaxis: 'x', yaxis: 'y' });
+    // ========== MINIMUM DIFFERENCE POINTS ==========
+    traces.push({
+        x: [results.xD, results.xB],
+        y: [results.QPrimeMin, results.QDoublePrimeMin],
+        mode: 'markers+text',
+        name: 'Min Diff Points',
+        marker: {
+            color: '#E9C46A', 
+            size: 14, 
+            symbol: 'star-diamond', 
+            line: {color: 'white', width: 2}
+        },
+        text: ['Δ<sub>R,min</sub>', 'Δ<sub>S,min</sub>'],
+        textposition: ['middle left', 'middle right'],
+        textfont: {size: 12, color: '#E9C46A'},
+        legendgroup: 'points',
+        xaxis: 'x',
+        yaxis: 'y'
+    });
     
     // ========== CONSTRUCTION LINES ==========
     if (results.construction_lines?.length) {
         results.construction_lines.forEach((line, i) => {
-            traces.push({ x: line.x, y: line.y, mode: 'lines', showlegend: i === 0,
+            traces.push({
+                x: line.x,
+                y: line.y,
+                mode: 'lines',
                 name: i === 0 ? 'Construction Lines' : undefined,
-                line: {color: '#B0B0B0', width: 1.5, dash: 'dot'}, xaxis: 'x', yaxis: 'y' });
+                line: {color: '#B0B0B0', width: 2, dash: 'dot'},
+                showlegend: i === 0,
+                legendgroup: 'construction',
+                xaxis: 'x',
+                yaxis: 'y'
+            });
         });
     }
     
     // ========== STAGE TIE LINES ==========
     results.tie_lines.forEach((tie, i) => {
         const color = stageColors[i % stageColors.length];
-        traces.push({ x: tie.x, y: tie.y, mode: 'lines', name: `Stage ${i+1}`,
-            line: {color, width: 3}, legendgroup: `stage_${i+1}`, xaxis: 'x', yaxis: 'y' });
-        traces.push({ x: tie.x, y: tie.y, mode: 'markers', showlegend: false,
-            marker: {color, size: 10, symbol: ['circle', 'diamond'], line: {color: 'white', width: 1}},
-            legendgroup: `stage_${i+1}`, xaxis: 'x', yaxis: 'y' });
+        traces.push({
+            x: tie.x,
+            y: tie.y,
+            mode: 'lines',
+            name: `Stage ${i+1}`,
+            line: {color, width: 3.5},
+            legendgroup: `stage_${i+1}`,
+            xaxis: 'x',
+            yaxis: 'y'
+        });
+        
+        // Titik pada stage (liquid = circle, vapor = square)
+        traces.push({
+            x: tie.x,
+            y: tie.y,
+            mode: 'markers',
+            showlegend: false,
+            marker: {
+                color: color,
+                size: 12,
+                symbol: ['circle', 'square'],
+                line: {color: 'white', width: 2}
+            },
+            legendgroup: `stage_${i+1}`,
+            xaxis: 'x',
+            yaxis: 'y'
+        });
     });
     
     // ========== VLE CURVE ==========
-    traces.push({ x: results.x_range, y: results.y_equilibrium, mode: 'lines',
-        name: 'Equilibrium Curve', line: {color: '#1E1E1E', width: 3.5}, xaxis: 'x2', yaxis: 'y2' });
-    traces.push({ x: [0, 1], y: [0, 1], mode: 'lines', name: 'y = x',
-        line: {color: '#6C757D', width: 2, dash: 'dash'}, xaxis: 'x2', yaxis: 'y2' });
+    traces.push({
+        x: results.x_range,
+        y: results.y_equilibrium,
+        mode: 'lines',
+        name: 'Equilibrium Curve',
+        line: {color: '#1E1E1E', width: 4},
+        legendgroup: 'vle',
+        xaxis: 'x2',
+        yaxis: 'y2'
+    });
+    
+    // ========== y = x LINE ==========
+    traces.push({
+        x: [0, 1],
+        y: [0, 1],
+        mode: 'lines',
+        name: 'y = x',
+        line: {color: '#6C757D', width: 2.5, dash: 'dash'},
+        legendgroup: 'vle',
+        xaxis: 'x2',
+        yaxis: 'y2'
+    });
     
     // ========== VLE TRACING ==========
     results.stage_compositions.forEach((stage, i) => {
         const color = stageColors[i % stageColors.length];
-        traces.push({ x: [stage.x, stage.y], y: [stage.y, stage.y], mode: 'lines',
-            line: {color, width: 2.5}, showlegend: false, legendgroup: `stage_${i+1}`, xaxis: 'x2', yaxis: 'y2' });
-        traces.push({ x: [stage.x, stage.y], y: [stage.y, stage.y], mode: 'markers', showlegend: false,
-            marker: {color, size: 12, symbol: ['circle', 'diamond'], line: {color: 'white', width: 1.5}},
+        
+        // Garis horizontal
+        traces.push({
+            x: [stage.x, stage.y],
+            y: [stage.y, stage.y],
+            mode: 'lines',
+            line: {color, width: 3},
+            showlegend: false,
+            legendgroup: `stage_${i+1}`,
+            xaxis: 'x2',
+            yaxis: 'y2'
+        });
+        
+        // Titik-titik stage di VLE
+        traces.push({
+            x: [stage.x, stage.y],
+            y: [stage.y, stage.y],
+            mode: 'markers',
+            showlegend: false,
+            marker: {
+                color: color,
+                size: 12,
+                symbol: ['circle', 'square'],
+                line: {color: 'white', width: 2}
+            },
             hovertemplate: `<b>Stage ${i+1}</b><br>Liquid: x = %{x[0]:.3f}<br>Vapor: y = %{y[1]:.3f}<extra></extra>`,
-            legendgroup: `stage_${i+1}`, xaxis: 'x2', yaxis: 'y2' });
+            legendgroup: `stage_${i+1}`,
+            xaxis: 'x2',
+            yaxis: 'y2'
+        });
     });
     
-    // ========== GARIS PROYEKSI ==========
+    // ========== GARIS PROYEKSI VERTIKAL (NYAMBUNG) ==========
     results.stage_compositions.forEach((stage, i) => {
         const color = stageColors[i % stageColors.length];
         const idxLiq = Math.round(stage.x * 199);
@@ -401,50 +586,151 @@ function createPlot(results) {
         const H_vap = results.HV_curve[idxVap];
         
         if (H_liq && H_vap) {
-            traces.push({ x: [stage.x, stage.x], y: [stage.y, 1], mode: 'lines', showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'}, xaxis: 'x2', yaxis: 'y2' });
-            traces.push({ x: [stage.x, stage.x], y: [results.yMin, H_liq], mode: 'lines', showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'}, xaxis: 'x', yaxis: 'y' });
-            traces.push({ x: [stage.y, stage.y], y: [stage.y, 1], mode: 'lines', showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'}, xaxis: 'x2', yaxis: 'y2' });
-            traces.push({ x: [stage.y, stage.y], y: [results.yMin, H_vap], mode: 'lines', showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'}, xaxis: 'x', yaxis: 'y' });
+            // Proyeksi liquid
+            traces.push({
+                x: [stage.x, stage.x],
+                y: [stage.y, 1],
+                mode: 'lines',
+                showlegend: false,
+                line: {color, width: 2, dash: 'dot'},
+                xaxis: 'x2',
+                yaxis: 'y2'
+            });
+            traces.push({
+                x: [stage.x, stage.x],
+                y: [results.yMin, H_liq],
+                mode: 'lines',
+                showlegend: false,
+                line: {color, width: 2, dash: 'dot'},
+                xaxis: 'x',
+                yaxis: 'y'
+            });
+            
+            // Proyeksi vapor
+            traces.push({
+                x: [stage.y, stage.y],
+                y: [stage.y, 1],
+                mode: 'lines',
+                showlegend: false,
+                line: {color, width: 2, dash: 'dot'},
+                xaxis: 'x2',
+                yaxis: 'y2'
+            });
+            traces.push({
+                x: [stage.y, stage.y],
+                y: [results.yMin, H_vap],
+                mode: 'lines',
+                showlegend: false,
+                line: {color, width: 2, dash: 'dot'},
+                xaxis: 'x',
+                yaxis: 'y'
+            });
         }
     });
     
-    traces.push({ x: [null], y: [null], mode: 'lines', name: 'Projection Lines',
-        line: {color: '#6C757D', width: 1.8, dash: 'dot'}, xaxis: 'x', yaxis: 'y' });
+    // Legend untuk projection lines
+    traces.push({
+        x: [null],
+        y: [null],
+        mode: 'lines',
+        name: 'Projection Lines',
+        line: {color: '#6C757D', width: 2, dash: 'dot'},
+        legendgroup: 'projection',
+        xaxis: 'x',
+        yaxis: 'y'
+    });
     
-    // ========== LAYOUT RESPONSIVE ==========
+    // ========== LAYOUT ==========
     const layout = {
-        title: { text: '<b>Ponchon–Savarit Diagram: Binary Distillation Analysis</b>',
-            font: {size: 22, family: 'Arial Black', color: '#1E1E1E'}, x: 0.5 },
-        grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
-        xaxis: { title: '<b>Mole Fraction (x or y)</b>', range: [0, 1], tickformat: '.2f',
-            tickfont: {size: 12}, titlefont: {size: 14}, gridcolor: '#E0E0E0', showline: true },
-        yaxis: { title: '<b>Enthalpy (MJ/kmol)</b>', range: [results.yMin, results.yMax],
-            tickfont: {size: 12}, titlefont: {size: 14}, gridcolor: '#E0E0E0', showline: true },
-        xaxis2: { title: '<b>Mole Fraction (x or y)</b>', range: [0, 1], tickformat: '.2f',
-            tickfont: {size: 12}, titlefont: {size: 14}, gridcolor: '#E0E0E0', showline: true },
-        yaxis2: { title: '<b>y (Vapor Fraction)</b>', range: [0, 1], tickformat: '.2f',
-            tickfont: {size: 12}, titlefont: {size: 14}, gridcolor: '#E0E0E0', showline: true },
-        height: window.innerHeight * 0.7,  // Responsive height (70% viewport)
-        width: window.innerWidth * 0.65,   // Responsive width (65% viewport)
+        title: {
+            text: '<b>Ponchon–Savarit Diagram: Binary Distillation Analysis</b>',
+            font: {size: 20, family: 'Arial Black', color: '#1E1E1E'},
+            x: 0.5
+        },
+        grid: {
+            rows: 2,
+            columns: 1,
+            pattern: 'independent',
+            roworder: 'top to bottom'
+        },
+        xaxis: {
+            title: '<b>Mole Fraction (x or y)</b>',
+            range: [0, 1],
+            tickformat: '.2f',
+            tickfont: {size: 11},
+            titlefont: {size: 13},
+            gridcolor: '#E0E0E0',
+            showline: true,
+            linewidth: 1,
+            linecolor: '#1E1E1E',
+            mirror: true
+        },
+        yaxis: {
+            title: '<b>Enthalpy (MJ/kmol)</b>',
+            range: [results.yMin, results.yMax],
+            tickfont: {size: 11},
+            titlefont: {size: 13},
+            gridcolor: '#E0E0E0',
+            showline: true,
+            linewidth: 1,
+            linecolor: '#1E1E1E',
+            mirror: true
+        },
+        xaxis2: {
+            title: '<b>Mole Fraction (x or y)</b>',
+            range: [0, 1],
+            tickformat: '.2f',
+            tickfont: {size: 11},
+            titlefont: {size: 13},
+            gridcolor: '#E0E0E0',
+            showline: true,
+            linewidth: 1,
+            linecolor: '#1E1E1E',
+            mirror: true
+        },
+        yaxis2: {
+            title: '<b>y (Vapor Fraction)</b>',
+            range: [0, 1],
+            tickformat: '.2f',
+            tickfont: {size: 11},
+            titlefont: {size: 13},
+            gridcolor: '#E0E0E0',
+            showline: true,
+            linewidth: 1,
+            linecolor: '#1E1E1E',
+            mirror: true
+        },
+        height: Math.max(700, window.innerHeight * 0.75),
+        width: document.querySelector('.main-content').clientWidth - 40,
         showlegend: true,
-        legend: { orientation: 'v', yanchor: 'top', y: 0.98, xanchor: 'left', x: 1.02,
-            font: {size: 11}, bgcolor: 'rgba(255,255,255,0.9)', bordercolor: '#1E1E1E', borderwidth: 1 },
-        hovermode: 'x unified', hoverlabel: { bgcolor: 'white', font_size: 12 },
-        template: 'plotly_white', plot_bgcolor: 'white', paper_bgcolor: 'white',
-        margin: {l: 60, r: 120, t: 80, b: 60}
+        legend: {
+            orientation: 'v',
+            yanchor: 'top',
+            y: 0.98,
+            xanchor: 'left',
+            x: 1.02,
+            font: {size: 10},
+            bgcolor: 'rgba(255,255,255,0.95)',
+            bordercolor: '#1E1E1E',
+            borderwidth: 1,
+            itemsizing: 'constant'
+        },
+        hovermode: 'x unified',
+        hoverlabel: {bgcolor: 'white', font_size: 11},
+        template: 'plotly_white',
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white',
+        margin: {l: 70, r: 140, t: 80, b: 70}
     };
     
     Plotly.newPlot('plotDiv', traces, layout, {responsive: true});
     
-    // Update plot size on window resize
+    // Update ukuran plot saat window diresize
     window.addEventListener('resize', () => {
+        const containerWidth = document.querySelector('.main-content')?.clientWidth || 900;
         Plotly.relayout('plotDiv', {
-            height: window.innerHeight * 0.7,
-            width: window.innerWidth * 0.65
+            height: Math.max(700, window.innerHeight * 0.75),
+            width: containerWidth - 40
         });
     });
 }
@@ -657,5 +943,6 @@ document.getElementById('exportBtn').addEventListener('click', function() {
 
 updatePreview();
 initPyodide();
+
 
 
