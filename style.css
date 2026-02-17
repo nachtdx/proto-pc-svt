@@ -1,85 +1,77 @@
-/* static/css/style.css */
+/* style.css - UPDATE LAYOUT */
 
-body {
-    overflow: hidden;
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* Biar gak dobel scroll */
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-.container-fluid {
-    padding: 0;
-}
-
-/* Scrollbar */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-
-::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #555;
-}
-
-/* Form controls */
-.form-control:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
-}
-
-/* Preview table */
-#previewTable {
-    font-family: 'Courier New', monospace;
-    font-size: 0.85rem;
-}
-
-#previewTable td, #previewTable th {
-    padding: 0.25rem;
-}
-
-/* Loading spinner */
-#loading {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(255, 255, 255, 0.95);
-    padding: 20px 40px;
-    border-radius: 10px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.2);
-    z-index: 9999;
-}
-
-/* Plot container */
-#plotDiv {
-    border: 1px solid #dee2e6;
-    border-radius: 5px;
-    background: white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-/* Results tables */
-.table-bordered {
-    border: 1px solid #dee2e6;
-}
-
-.table thead th {
+.main-container {
+    height: 100vh;
+    overflow-y: auto; /* SCROLL UTAMA DI SINI! */
     background-color: #f8f9fa;
-    border-bottom: 2px solid #dee2e6;
 }
 
-/* Sidebar */
-.bg-light {
-    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+/* Header fixed? Gak perlu, karena scroll di container */
 
+.row {
+    margin: 0;
 }
+
+/* Sidebar - fixed height, scroll internal */
+.col-md-4 {
+    height: 100%;
+    overflow-y: auto;
+    background: #f8f9fa;
+    border-right: 1px solid #dee2e6;
+}
+
+/* Main content area */
+.col-md-8 {
+    padding: 20px;
+}
+
+/* Plot container - gede, subplot rapat */
+#plotDiv {
+    width: 100%;
+    height: 800px; /* Plot gede */
+    margin-bottom: 30px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Results section - muncul di bawah plot */
+.results-section {
+    margin-top: 30px;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+/* Tables - dalam container sendiri, bukan scroll terpisah */
+.table-container {
+    margin-top: 15px;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th {
+    background-color: #f1f3f5;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+/* Loading overlay */
 .loading-overlay {
     position: fixed;
     top: 0;
@@ -116,4 +108,16 @@ body {
     line-height: 25px;
     font-size: 14px;
     font-weight: bold;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    #plotDiv {
+        height: 500px;
+    }
+    
+    .col-md-4 {
+        height: auto;
+        max-height: 50vh;
+    }
 }
