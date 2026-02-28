@@ -109,6 +109,7 @@ function updateUnitDisplay(systemType) {
     const previewUnitBadge = document.getElementById('previewUnitBadge');
     const dataInfoText = document.getElementById('dataInfoText');
     const unitNote = document.getElementById('unitNote');
+    const datasetInfoPanel = document.getElementById('datasetInfoPanel');
     
     if (isBritish) {
         unitDisplay.textContent = 'British Units (BTU/lbmole, °F)';
@@ -116,7 +117,7 @@ function updateUnitDisplay(systemType) {
         hlUnit.textContent = 'BTU/lbmole';
         hvUnit.textContent = 'BTU/lbmole';
         previewUnitBadge.textContent = 'BTU/lbmole';
-        dataInfoText.innerHTML = 'Ethanol-Water dataset in British Units';
+        dataInfoText.innerHTML = 'Ethanol-Water dataset (preloaded - read only)';
         unitNote.innerHTML = '<b>British Units:</b> Enthalpy in BTU/lbmole, Temperature in °F';
         
         // Set inputs to readonly
@@ -124,6 +125,9 @@ function updateUnitDisplay(systemType) {
         document.getElementById('yData').readOnly = true;
         document.getElementById('Hl').readOnly = true;
         document.getElementById('Hv').readOnly = true;
+        
+        // Show dataset info panel
+        datasetInfoPanel.style.display = 'block';
     } else {
         unitDisplay.textContent = 'User Defined (any units)';
         unitDisplay.className = 'unit-badge';
@@ -131,13 +135,16 @@ function updateUnitDisplay(systemType) {
         hvUnit.textContent = 'any units';
         previewUnitBadge.textContent = 'any units';
         dataInfoText.innerHTML = 'Input data sebagai array. Pisahkan dengan koma.';
-        unitNote.innerHTML = 'User Defined: bebas menggunakan satuan apapun (SI, British, dll)';
+        unitNote.innerHTML = 'User Defined: bebas menggunakan satuan apapun';
         
         // Set inputs to editable
         document.getElementById('xData').readOnly = false;
         document.getElementById('yData').readOnly = false;
         document.getElementById('Hl').readOnly = false;
         document.getElementById('Hv').readOnly = false;
+        
+        // Hide dataset info panel
+        datasetInfoPanel.style.display = 'none';
     }
 }
 
@@ -148,6 +155,8 @@ function loadEthanolWaterDataset(pressure) {
     const dataset = ETHANOL_WATER_DATA[pressure];
     if (!dataset) return;
     
+    console.log(`Loading ${dataset.name} dataset...`);
+    
     // Update input fields with British units data
     document.getElementById('xData').value = JSON.stringify(dataset.x);
     document.getElementById('yData').value = JSON.stringify(dataset.y);
@@ -157,22 +166,31 @@ function loadEthanolWaterDataset(pressure) {
     // Store temperature data for reference
     document.getElementById('TData').value = JSON.stringify(dataset.T);
     
+    // Update dataset info panel
+    document.getElementById('datasetName').textContent = dataset.name;
+    
+    let azeoInfo = '';
+    if (dataset.azeotrope) {
+        azeoInfo = ` | Azeotrope: x = ${dataset.azeotrope.x.toFixed(3)} at ${dataset.azeotrope.T.toFixed(1)}°F`;
+    }
+    
+    document.getElementById('datasetDetails').innerHTML = `
+        <i class="fas fa-database me-1"></i> ${dataset.x.length} points
+        <i class="fas fa-fire ms-2 me-1"></i> Hl: ${dataset.Hl[0]}-${dataset.Hl[dataset.Hl.length-1]} BTU/lbmole
+        <i class="fas fa-temperature-high ms-2 me-1"></i> T: ${dataset.T[0].toFixed(1)}-${dataset.T[dataset.T.length-1].toFixed(1)}°F
+        ${azeoInfo}
+    `;
+    
     // Update system info display
     const systemInfo = document.getElementById('systemInfo');
     const systemInfoText = document.getElementById('systemInfoText');
     systemInfo.style.display = 'block';
     
-    let azeoInfo = '';
-    if (dataset.azeotrope) {
-        azeoInfo = `<br>📍 Azeotrope: x = ${dataset.azeotrope.x.toFixed(3)}, T = ${dataset.azeotrope.T.toFixed(1)}°F`;
-    }
-    
     systemInfoText.innerHTML = `
         <b>${dataset.name}</b><br>
         📊 ${dataset.x.length} data points<br>
         🔥 Enthalpy: <b>${dataset.units.enthalpy}</b><br>
-        🌡️ Temperature: <b>${dataset.units.temperature}</b><br>
-        📈 Composition: <b>${dataset.units.composition}</b>${azeoInfo}
+        🌡️ Temperature: <b>${dataset.units.temperature}</b>
     `;
     
     // Update unit display
@@ -406,7 +424,7 @@ def calculate(data, params):
     HW = linear_interpolate(xB, data['xData'], data['Hl'])
     
     if not all(np.isfinite([yF, HLzF, HVzF, HF, HD, HW])):
-        return {'error': "Interpolation failed."}
+        return {'error': "Interpolation failed. Check if compositions are within data range."}
     
     D = F * (zF - xB) / (xD - xB)
     W = F - D
@@ -493,7 +511,7 @@ def calculate_from_js(xData, yData, Hl, Hv, zF, F, xD, xB, q, R):
 async function runCalculation(inputData) {
     if (!pyodideReady) throw new Error('Pyodide belum siap.');
     try {
-        return JSON.parse(pyodide.runPython(`
+        const result = pyodide.runPython(`
             calculate_from_js(
                 ${JSON.stringify(inputData.xData)},
                 ${JSON.stringify(inputData.yData)},
@@ -502,7 +520,8 @@ async function runCalculation(inputData) {
                 ${inputData.zF}, ${inputData.F}, ${inputData.xD}, 
                 ${inputData.xB}, ${inputData.q}, ${inputData.R}
             )
-        `));
+        `);
+        return JSON.parse(result);
     } catch (error) {
         console.error('Error running calculation:', error);
         throw error;
@@ -675,29 +694,31 @@ function createPlot(results) {
     }
     
     // ========== STAGE TIE LINES ==========
-    results.tie_lines.forEach((tie, i) => {
-        const color = stageColors[i % stageColors.length];
-        traces.push({
-            x: tie.x,
-            y: tie.y,
-            mode: 'lines',
-            name: `Stage ${i+1}`,
-            line: {color, width: 3},
-            legendgroup: `stage_${i+1}`,
-            xaxis: 'x',
-            yaxis: 'y'
+    if (results.tie_lines && results.tie_lines.length > 0) {
+        results.tie_lines.forEach((tie, i) => {
+            const color = stageColors[i % stageColors.length];
+            traces.push({
+                x: tie.x,
+                y: tie.y,
+                mode: 'lines',
+                name: `Stage ${i+1}`,
+                line: {color, width: 3},
+                legendgroup: `stage_${i+1}`,
+                xaxis: 'x',
+                yaxis: 'y'
+            });
+            traces.push({
+                x: tie.x,
+                y: tie.y,
+                mode: 'markers',
+                showlegend: false,
+                marker: {color, size: 10, symbol: ['circle', 'diamond'], line: {color: 'white', width: 1}},
+                legendgroup: `stage_${i+1}`,
+                xaxis: 'x',
+                yaxis: 'y'
+            });
         });
-        traces.push({
-            x: tie.x,
-            y: tie.y,
-            mode: 'markers',
-            showlegend: false,
-            marker: {color, size: 10, symbol: ['circle', 'diamond'], line: {color: 'white', width: 1}},
-            legendgroup: `stage_${i+1}`,
-            xaxis: 'x',
-            yaxis: 'y'
-        });
-    });
+    }
     
     // ========== VLE CURVE ==========
     traces.push({
@@ -722,84 +743,88 @@ function createPlot(results) {
     });
     
     // ========== VLE TRACING ==========
-    results.stage_compositions.forEach((stage, i) => {
-        const color = stageColors[i % stageColors.length];
-        traces.push({
-            x: [stage.x, stage.y],
-            y: [stage.y, stage.y],
-            mode: 'lines',
-            line: {color, width: 2.5},
-            showlegend: false,
-            legendgroup: `stage_${i+1}`,
-            xaxis: 'x2',
-            yaxis: 'y2'
+    if (results.stage_compositions && results.stage_compositions.length > 0) {
+        results.stage_compositions.forEach((stage, i) => {
+            const color = stageColors[i % stageColors.length];
+            traces.push({
+                x: [stage.x, stage.y],
+                y: [stage.y, stage.y],
+                mode: 'lines',
+                line: {color, width: 2.5},
+                showlegend: false,
+                legendgroup: `stage_${i+1}`,
+                xaxis: 'x2',
+                yaxis: 'y2'
+            });
+            traces.push({
+                x: [stage.x, stage.y],
+                y: [stage.y, stage.y],
+                mode: 'markers',
+                showlegend: false,
+                marker: {color, size: 12, symbol: ['circle', 'diamond'], line: {color: 'white', width: 1.5}},
+                hovertemplate: `<b>Stage ${i+1}</b><br>Liquid: x = %{x[0]:.3f}<br>Vapor: y = %{y[1]:.3f}<extra></extra>`,
+                legendgroup: `stage_${i+1}`,
+                xaxis: 'x2',
+                yaxis: 'y2'
+            });
         });
-        traces.push({
-            x: [stage.x, stage.y],
-            y: [stage.y, stage.y],
-            mode: 'markers',
-            showlegend: false,
-            marker: {color, size: 12, symbol: ['circle', 'diamond'], line: {color: 'white', width: 1.5}},
-            hovertemplate: `<b>Stage ${i+1}</b><br>Liquid: x = %{x[0]:.3f}<br>Vapor: y = %{y[1]:.3f}<extra></extra>`,
-            legendgroup: `stage_${i+1}`,
-            xaxis: 'x2',
-            yaxis: 'y2'
-        });
-    });
+    }
     
     // ========== GARIS PROYEKSI ==========
-    results.stage_compositions.forEach((stage, i) => {
-        const color = stageColors[i % stageColors.length];
-        const x_liq = stage.x;
-        const y_liq = stage.y;
-        
-        const idxLiq = Math.round(x_liq * 199);
-        const idxVap = Math.round(y_liq * 199);
-        const H_liq_stage = results.HL_curve[idxLiq];
-        const H_vap_stage = results.HV_curve[idxVap];
-        
-        if (H_liq_stage && H_vap_stage) {
-            // Proyeksi liquid
-            traces.push({
-                x: [x_liq, x_liq],
-                y: [H_liq_stage, results.yMin],
-                mode: 'lines',
-                showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'},
-                xaxis: 'x',
-                yaxis: 'y'
-            });
-            traces.push({
-                x: [x_liq, x_liq],
-                y: [1.0, y_liq],
-                mode: 'lines',
-                showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'},
-                xaxis: 'x2',
-                yaxis: 'y2'
-            });
+    if (results.stage_compositions && results.stage_compositions.length > 0) {
+        results.stage_compositions.forEach((stage, i) => {
+            const color = stageColors[i % stageColors.length];
+            const x_liq = stage.x;
+            const y_liq = stage.y;
             
-            // Proyeksi vapor
-            traces.push({
-                x: [y_liq, y_liq],
-                y: [H_vap_stage, results.yMin],
-                mode: 'lines',
-                showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'},
-                xaxis: 'x',
-                yaxis: 'y'
-            });
-            traces.push({
-                x: [y_liq, y_liq],
-                y: [1.0, y_liq],
-                mode: 'lines',
-                showlegend: false,
-                line: {color, width: 1.8, dash: 'dot'},
-                xaxis: 'x2',
-                yaxis: 'y2'
-            });
-        }
-    });
+            const idxLiq = Math.round(x_liq * 199);
+            const idxVap = Math.round(y_liq * 199);
+            const H_liq_stage = results.HL_curve ? results.HL_curve[idxLiq] : null;
+            const H_vap_stage = results.HV_curve ? results.HV_curve[idxVap] : null;
+            
+            if (H_liq_stage && H_vap_stage) {
+                // Proyeksi liquid
+                traces.push({
+                    x: [x_liq, x_liq],
+                    y: [H_liq_stage, results.yMin],
+                    mode: 'lines',
+                    showlegend: false,
+                    line: {color, width: 1.8, dash: 'dot'},
+                    xaxis: 'x',
+                    yaxis: 'y'
+                });
+                traces.push({
+                    x: [x_liq, x_liq],
+                    y: [1.0, y_liq],
+                    mode: 'lines',
+                    showlegend: false,
+                    line: {color, width: 1.8, dash: 'dot'},
+                    xaxis: 'x2',
+                    yaxis: 'y2'
+                });
+                
+                // Proyeksi vapor
+                traces.push({
+                    x: [y_liq, y_liq],
+                    y: [H_vap_stage, results.yMin],
+                    mode: 'lines',
+                    showlegend: false,
+                    line: {color, width: 1.8, dash: 'dot'},
+                    xaxis: 'x',
+                    yaxis: 'y'
+                });
+                traces.push({
+                    x: [y_liq, y_liq],
+                    y: [1.0, y_liq],
+                    mode: 'lines',
+                    showlegend: false,
+                    line: {color, width: 1.8, dash: 'dot'},
+                    xaxis: 'x2',
+                    yaxis: 'y2'
+                });
+            }
+        });
+    }
     
     // ========== LAYOUT ==========
     const layout = {
@@ -912,13 +937,20 @@ function displayResults(results) {
     document.getElementById('summaryBody').innerHTML = summaryHtml;
     
     let stagesRows = '';
-    results.stage_compositions.forEach((stage, i) => {
-        stagesRows += `<tr><td>Stage ${i+1}</td><td>${stage.x.toFixed(4)}</td><td>${stage.y.toFixed(4)}</td></tr>`;
-    });
+    if (results.stage_compositions && results.stage_compositions.length > 0) {
+        results.stage_compositions.forEach((stage, i) => {
+            stagesRows += `<tr><td>Stage ${i+1}</td><td>${stage.x.toFixed(4)}</td><td>${stage.y.toFixed(4)}</td></tr>`;
+        });
+    } else {
+        stagesRows = '<tr><td colspan="3" class="text-center text-muted">No stage data available</td></tr>';
+    }
     document.getElementById('stagesBody').innerHTML = stagesRows;
     
     document.getElementById('exportBtn').disabled = false;
     currentResults = results;
+    
+    // Show success message
+    showToast('✅ Calculation completed successfully!', 'success');
 }
 
 // ==========================================
@@ -981,11 +1013,15 @@ document.getElementById('systemType').addEventListener('change', function() {
     const systemType = this.value;
     currentSystem = systemType;
     
+    console.log(`System changed to: ${systemType}`);
+    
     // Reset system info display
     const systemInfo = document.getElementById('systemInfo');
+    const datasetInfoPanel = document.getElementById('datasetInfoPanel');
     
     if (systemType === 'user-defined') {
         systemInfo.style.display = 'none';
+        datasetInfoPanel.style.display = 'none';
         
         // Restore example data
         document.getElementById('xData').value = '[0, 0.08, 0.18, 0.25, 0.49, 0.65, 0.79, 0.91, 1.0]';
@@ -1015,21 +1051,33 @@ document.getElementById('calculateBtn').addEventListener('click', async function
     const loading = document.getElementById('loading');
     const btn = this;
     
+    // Get data from inputs
     const xData = parseArrayString(document.getElementById('xData').value);
     const yData = parseArrayString(document.getElementById('yData').value);
     const Hl = parseArrayString(document.getElementById('Hl').value);
     const Hv = parseArrayString(document.getElementById('Hv').value);
     
+    // Validate arrays
     const validations = [
-        validateArray(xData, 'xData'), validateArray(yData, 'yData'),
-        validateArray(Hl, 'Hl'), validateArray(Hv, 'Hv')
+        validateArray(xData, 'xData'), 
+        validateArray(yData, 'yData'),
+        validateArray(Hl, 'Hl'), 
+        validateArray(Hv, 'Hv')
     ];
-    for (let v of validations) if (!v.valid) { alert('Error: ' + v.error); return; }
     
-    if (xData.length !== yData.length || xData.length !== Hl.length || xData.length !== Hv.length) {
-        alert('Error: Semua array harus sama panjang!'); return;
+    for (let v of validations) {
+        if (!v.valid) { 
+            alert('Error: ' + v.error); 
+            return; 
+        }
     }
     
+    if (xData.length !== yData.length || xData.length !== Hl.length || xData.length !== Hv.length) {
+        alert('Error: Semua array harus sama panjang!'); 
+        return;
+    }
+    
+    // Get q value
     let q = document.getElementById('q').value;
     q = q === 'custom' ? parseFloat(document.getElementById('customQ').value) : parseFloat(q);
     
@@ -1039,21 +1087,26 @@ document.getElementById('calculateBtn').addEventListener('click', async function
         F: parseFloat(document.getElementById('F').value),
         xD: parseFloat(document.getElementById('xD').value),
         xB: parseFloat(document.getElementById('xB').value),
-        q, R: parseFloat(document.getElementById('R').value)
+        q, 
+        R: parseFloat(document.getElementById('R').value)
     };
     
     btn.disabled = true;
     loading.style.display = 'block';
     
     try {
+        console.log('Running calculation with data:', inputData);
         const results = await runCalculation(inputData);
+        console.log('Results:', results);
+        
         if (results.error) {
             alert('Error: ' + results.error);
+            showToast('❌ Calculation failed: ' + results.error, 'warning');
         } else {
             displayResults(results);
-            showToast('✅ Calculation completed successfully!', 'success');
         }
     } catch (error) {
+        console.error('Calculation error:', error);
         alert('Error: ' + error.message);
         showToast('❌ Calculation failed: ' + error.message, 'warning');
     } finally {
@@ -1070,21 +1123,26 @@ document.getElementById('exportBtn').addEventListener('click', function() {
     const enthalpyUnit = isBritish ? 'BTU/lbmole' : 'MJ/kmol';
     
     let csv = 'Stage,x (Liquid),y (Vapor),HL (' + enthalpyUnit + '),HV (' + enthalpyUnit + ')\n';
-    currentResults.stage_compositions.forEach((stage, i) => {
-        // Find corresponding enthalpy values
-        const idxLiq = Math.round(stage.x * 199);
-        const idxVap = Math.round(stage.y * 199);
-        const HL = currentResults.HL_curve[idxLiq]?.toFixed(2) || 'N/A';
-        const HV = currentResults.HV_curve[idxVap]?.toFixed(2) || 'N/A';
-        
-        csv += `${i+1},${stage.x.toFixed(4)},${stage.y.toFixed(4)},${HL},${HV}\n`;
-    });
+    
+    if (currentResults.stage_compositions && currentResults.stage_compositions.length > 0) {
+        currentResults.stage_compositions.forEach((stage, i) => {
+            // Find corresponding enthalpy values
+            const idxLiq = Math.round(stage.x * 199);
+            const idxVap = Math.round(stage.y * 199);
+            const HL = currentResults.HL_curve && currentResults.HL_curve[idxLiq] ? 
+                     currentResults.HL_curve[idxLiq].toFixed(2) : 'N/A';
+            const HV = currentResults.HV_curve && currentResults.HV_curve[idxVap] ? 
+                     currentResults.HV_curve[idxVap].toFixed(2) : 'N/A';
+            
+            csv += `${i+1},${stage.x.toFixed(4)},${stage.y.toFixed(4)},${HL},${HV}\n`;
+        });
+    }
     
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; 
-    a.download = `ponchon_savarit_results_${systemType}.csv`; 
+    a.download = `ponchon_savarit_results_${systemType}_${new Date().toISOString().slice(0,10)}.csv`; 
     a.click();
     window.URL.revokeObjectURL(url);
     
@@ -1092,5 +1150,7 @@ document.getElementById('exportBtn').addEventListener('click', function() {
 });
 
 // Initialize
-updatePreview();
-initPyodide();
+document.addEventListener('DOMContentLoaded', function() {
+    updatePreview();
+    initPyodide();
+});
