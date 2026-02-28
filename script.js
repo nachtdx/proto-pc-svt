@@ -508,7 +508,7 @@ async function runCalculation(inputData) {
 }
 
 // ==========================================
-// CREATE PLOT - PONCHON-SAVARIT (VLE STEPPING UPWARD - FIXED)
+// CREATE PLOT - PONCHON-SAVARIT (WITH VERTICAL CONNECTOR LINES)
 // ==========================================
 function createPlot(results) {
     const stageColors = [
@@ -536,7 +536,7 @@ function createPlot(results) {
         xaxis: 'x', yaxis: 'y'
     });
 
-    // ========== VERTICAL DASHED LINES xD, xB, zF ==========
+    // ========== VERTICAL DASHED LINES xD, xB, zF — both plots ==========
     const verticals = [
         { val: results.xD, label: 'x<sub>D</sub>', color: '#9E9E9E' },
         { val: results.xB, label: 'x<sub>B</sub>', color: '#9E9E9E' },
@@ -606,7 +606,7 @@ function createPlot(results) {
         results.construction_lines.forEach((cl, i) => {
             traces.push({
                 x: cl.x, y: cl.y, mode: 'lines',
-                name: i === 0 ? 'Construction Line 1' : undefined,
+                name: i === 0 ? 'Construction Line' : undefined,
                 showlegend: i === 0,
                 line: { color: '#BDBDBD', width: 1.5, dash: 'dot' },
                 xaxis: 'x', yaxis: 'y'
@@ -614,7 +614,7 @@ function createPlot(results) {
         });
     }
 
-    // ========== VLE EQUILIBRIUM CURVE (drawn first, behind stages) ==========
+    // ========== VLE EQUILIBRIUM CURVE ==========
     traces.push({
         x: results.x_range, y: results.y_equilibrium,
         mode: 'lines', name: 'Equilibrium Curve',
@@ -630,45 +630,32 @@ function createPlot(results) {
         xaxis: 'x2', yaxis: 'y2'
     });
 
-    // ========== STAGE TIE LINES + PROJECTIONS + VLE STEPPING ==========
-    //
-    // Python calculate_stages() builds tie_lines ordered from xD toward xB.
-    // tie_lines[0] is closest to xD (top of column), tie_lines[N-1] closest to xB.
-    //
-    // Each tie line: tie.x[0] = x_liq, tie.x[1] = y_vap
-    //   x_liq < y_vap always (liquid leaner than vapor)
-    //
-    // On VLE diagram, correct Ponchon-Savarit construction stepping UPWARD:
-    //
-    //   Start from xB on y=x diagonal, step UP to equilibrium curve, then
-    //   horizontal RIGHT to y=x, repeat toward xD.
-    //
-    // For stage i (0 = closest to xD):
-    //   Equilibrium point: (x_liq, y_vap)  ← on the equilibrium curve
-    //   Tie line:  horizontal from (x_liq, y_vap) RIGHT to (y_vap, y_vap) on y=x
-    //   Operating step: vertical from (y_vap, y_vap) UP to next equilibrium point
-    //     → next stage equilibrium point is stage[i+1] = (x_liq_next, y_vap_next)
-    //     → but we go from y_vap upward to y_vap_next (the y value of next stage)
-    //
-    // Since tie_lines are ordered xD→xB, we reverse to step xB→xD (upward):
-
+    // ========== STAGE CONSTRUCTION ==========
+    // tie_lines from Python: ordered xD → xB, so reverse for ascending (xB → xD)
     const tieLines = results.tie_lines || [];
     const numStages = tieLines.length;
-
-    // Reverse so we step from bottom (xB side) to top (xD side)
     const tieLinesAsc = [...tieLines].reverse();
 
-    let projLegendAdded = false;
+    // Helper: interpolate H value from curve at given composition x
+    function interpHL(x) {
+        const idx = Math.min(Math.round(x * (results.x_range.length - 1)), results.x_range.length - 1);
+        return results.HL_curve?.[idx] ?? null;
+    }
+    function interpHV(y) {
+        const idx = Math.min(Math.round(y * (results.x_range.length - 1)), results.x_range.length - 1);
+        return results.HV_curve?.[idx] ?? null;
+    }
+
+    let connectorLegendAdded = false;
 
     for (let i = 0; i < numStages; i++) {
-        // Use original index for color (stage 1 = closest to xD = tieLines[0])
         const origIdx = numStages - 1 - i;
         const tie = tieLinesAsc[i];
         const color = stageColors[origIdx % stageColors.length];
         const stageNum = origIdx + 1;
 
-        const x_liq = tie.x[0];   // liquid composition on HL
-        const y_vap = tie.x[1];   // vapor composition on HV
+        const x_liq = tie.x[0];   // liquid composition → on HL curve
+        const y_vap = tie.x[1];   // vapor composition → on HV curve
         const H_liq = tie.y[0];
         const H_vap = tie.y[1];
 
@@ -688,47 +675,7 @@ function createPlot(results) {
             xaxis: 'x', yaxis: 'y'
         });
 
-        // ── H-x-y: PROJECTION LINES ──
-        traces.push({
-            x: [x_liq, x_liq], y: [H_liq, results.yMin],
-            mode: 'lines',
-            name: !projLegendAdded ? 'Projection Lines' : undefined,
-            showlegend: !projLegendAdded,
-            line: { color: color, width: 1.2, dash: 'dot' },
-            legendgroup: `stage_${stageNum}`,
-            xaxis: 'x', yaxis: 'y'
-        });
-        projLegendAdded = true;
-        traces.push({
-            x: [y_vap, y_vap], y: [H_vap, results.yMin],
-            mode: 'lines', showlegend: false,
-            line: { color: color, width: 1.2, dash: 'dot' },
-            legendgroup: `stage_${stageNum}`,
-            xaxis: 'x', yaxis: 'y'
-        });
-
-        // ══════════════════════════════════════════════════════
-        // VLE DIAGRAM — Ponchon-Savarit stepping UPWARD
-        //
-        // Step sequence for stage i (ascending from xB to xD):
-        //
-        //  A = (x_liq, y_vap)        ← on equilibrium curve   [ABOVE]
-        //  B = (y_vap, y_vap)        ← on y=x diagonal        [RIGHT of A, same height]
-        //  C = (y_vap, y_vap_next)   ← on operating line      [ABOVE B, vertical up]
-        //
-        // where y_vap_next = y_vap of the NEXT stage (i+1) going toward xD
-        // Last stage: y_vap_next = xD (distillate)
-        //
-        // So:
-        //   Tie line:      A → B  (horizontal RIGHT)
-        //   Operating line: B → C  (vertical UP)
-        // ══════════════════════════════════════════════════════
-
-        // y_vap of next stage (going toward xD = stage i+1 in ascending order)
-        const nextTie = (i + 1 < numStages) ? tieLinesAsc[i + 1] : null;
-        const y_vap_next = nextTie ? nextTie.x[1] : results.xD;
-
-        // Point A: equilibrium curve (x_liq, y_vap)
+        // ── VLE: equilibrium point A = (x_liq, y_vap) ──
         traces.push({
             x: [x_liq], y: [y_vap],
             mode: 'markers',
@@ -737,7 +684,7 @@ function createPlot(results) {
             xaxis: 'x2', yaxis: 'y2'
         });
 
-        // TIE LINE on VLE: horizontal RIGHT from A(x_liq, y_vap) → B(y_vap, y_vap)
+        // ── VLE: TIE LINE horizontal RIGHT from (x_liq, y_vap) → (y_vap, y_vap) ──
         traces.push({
             x: [x_liq, y_vap], y: [y_vap, y_vap],
             mode: 'lines',
@@ -746,7 +693,7 @@ function createPlot(results) {
             xaxis: 'x2', yaxis: 'y2'
         });
 
-        // Point B: y=x diagonal (y_vap, y_vap)
+        // Point B on y=x: (y_vap, y_vap)
         traces.push({
             x: [y_vap], y: [y_vap],
             mode: 'markers',
@@ -755,14 +702,86 @@ function createPlot(results) {
             xaxis: 'x2', yaxis: 'y2'
         });
 
-        // OPERATING LINE STEP: vertical UP from B(y_vap, y_vap) → C(y_vap, y_vap_next)
-        // y_vap_next > y_vap so this goes UPWARD
+        // ── VLE: OPERATING STEP vertical UP from (y_vap, y_vap) → (y_vap, y_vap_next) ──
+        const nextTie = (i + 1 < numStages) ? tieLinesAsc[i + 1] : null;
+        const y_vap_next = nextTie ? nextTie.x[1] : results.xD;
+
         traces.push({
             x: [y_vap, y_vap], y: [y_vap, y_vap_next],
             mode: 'lines',
             line: { color: color, width: 2.5 },
             showlegend: false, legendgroup: `stage_${stageNum}`,
             xaxis: 'x2', yaxis: 'y2'
+        });
+
+        // ══════════════════════════════════════════════════════════════
+        // VERTICAL CONNECTOR LINES: VLE → Enthalpy diagram
+        //
+        // For each key point in VLE, draw a dashed vertical line
+        // that goes UP into the enthalpy diagram to the corresponding
+        // point on the HL or HV curve.
+        //
+        // Key points to connect:
+        //   1. Equilibrium point (x_liq, y_vap) in VLE
+        //      → x_liq maps to HL curve: H_liq in enthalpy diagram
+        //      → y_vap maps to HV curve: H_vap in enthalpy diagram
+        //
+        // These are drawn as annotations spanning BOTH subplots using
+        // paper coordinates, since Plotly subplots can't share axes.
+        // We use a trick: draw the connector in the TOP plot (xaxis/yaxis)
+        // starting from yMin (bottom of enthalpy plot) going down visually.
+        //
+        // Actually we draw them in BOTH plots:
+        //   - In top plot (xaxis/yaxis): from yMin down (as projection lines)
+        //   - In bottom plot (xaxis2/yaxis2): from y_vap UP to 1 (top of VLE)
+        //
+        // Together they create the visual illusion of a continuous vertical
+        // dashed line connecting both diagrams.
+        // ══════════════════════════════════════════════════════════════
+
+        const showConnectorLegend = !connectorLegendAdded;
+
+        // --- Connector for x_liq ---
+        // In BOTTOM plot: from equilibrium point y_vap UP to top of VLE (y=1)
+        traces.push({
+            x: [x_liq, x_liq], y: [y_vap, 1.05],
+            mode: 'lines',
+            name: showConnectorLegend ? 'VLE↔Enthalpy Links' : undefined,
+            showlegend: showConnectorLegend,
+            line: { color: color, width: 1.5, dash: 'dot' },
+            legendgroup: `stage_${stageNum}`,
+            xaxis: 'x2', yaxis: 'y2'
+        });
+        connectorLegendAdded = true;
+
+        // In TOP plot: from yMin (bottom) down to H_liq on HL curve
+        // (visually this continues the dashed line from below)
+        traces.push({
+            x: [x_liq, x_liq], y: [results.yMin, H_liq],
+            mode: 'lines',
+            showlegend: false,
+            line: { color: color, width: 1.5, dash: 'dot' },
+            legendgroup: `stage_${stageNum}`,
+            xaxis: 'x', yaxis: 'y'
+        });
+
+        // --- Connector for y_vap ---
+        // In BOTTOM plot: from y=y_vap at x=y_vap UP to top of VLE
+        traces.push({
+            x: [y_vap, y_vap], y: [y_vap, 1.05],
+            mode: 'lines', showlegend: false,
+            line: { color: color, width: 1.5, dash: 'dot' },
+            legendgroup: `stage_${stageNum}`,
+            xaxis: 'x2', yaxis: 'y2'
+        });
+
+        // In TOP plot: from yMin up to H_vap on HV curve
+        traces.push({
+            x: [y_vap, y_vap], y: [results.yMin, H_vap],
+            mode: 'lines', showlegend: false,
+            line: { color: color, width: 1.5, dash: 'dot' },
+            legendgroup: `stage_${stageNum}`,
+            xaxis: 'x', yaxis: 'y'
         });
     }
 
@@ -1184,6 +1203,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updatePreview();
     initPyodide();
 });
+
 
 
 
