@@ -336,7 +336,7 @@ def calculate_stages(xD, xB, zF, HF, q, R, D, W, xDeltaR, HDeltaR, xDeltaS, HDel
             break
 
         HLx_n = linear_interpolate(x_n, data['xData'], data['Hl'])
-        HVy_n = cubic_interpolate(y, data['yData'], data['Hv'])
+        HVy_n = safe_hv_at_y(y, data['yData'], data['Hv'])
 
         tie_lines.append({'x': [x_n, y], 'y': [HLx_n, HVy_n]})
         stage_compositions.append({'x': x_n, 'y': y})
@@ -392,26 +392,54 @@ def calculate_stages(xD, xB, zF, HF, q, R, D, W, xDeltaR, HDeltaR, xDeltaS, HDel
         'stage_compositions': stage_compositions, 'error': ''
     }
 
+def safe_hv_at_y(y_val, yData, Hv):
+    """Get HV at a given vapor composition y. Uses linear interp on (yData->Hv).
+    Safe for ammonia-like near-flat yData sequences."""
+    return linear_interpolate(y_val, yData, Hv)
+
+def safe_equil_y(x_val, xData, yData):
+    """Get equilibrium y at liquid composition x. Uses cubic then falls back to linear."""
+    result = cubic_interpolate(x_val, xData, yData)
+    if not np.isfinite(result):
+        result = linear_interpolate(x_val, xData, yData)
+    return result
+
 def calculate(data, params):
     zF = params['zF']; F = params['F']
     xD = params['xD']; xB = params['xB']
     q  = params['q'];  R  = params['R']
 
-    yF     = cubic_interpolate(zF, data['xData'], data['yData'])
-    HLzF   = linear_interpolate(zF, data['xData'], data['Hl'])
-    HVzF   = cubic_interpolate(yF, data['yData'], data['Hv'])
-    HF     = q * HLzF + (1 - q) * HVzF
-    HD     = linear_interpolate(xD, data['xData'], data['Hl'])
-    HW     = linear_interpolate(xB, data['xData'], data['Hl'])
+    # Validate input ranges
+    xData = data['xData']
+    if zF < xData[0] or zF > xData[-1]:
+        return {'error': f'zF={zF} out of data range [{xData[0]}, {xData[-1]}]'}
+    if xD < xData[0] or xD > xData[-1]:
+        return {'error': f'xD={xD} out of data range [{xData[0]}, {xData[-1]}]'}
+    if xB < xData[0] or xB > xData[-1]:
+        return {'error': f'xB={xB} out of data range [{xData[0]}, {xData[-1]}]'}
 
-    if not all(np.isfinite([yF, HLzF, HVzF, HF, HD, HW])):
-        return {'error': 'Interpolation failed. Check compositions are within data range.'}
+    yF   = safe_equil_y(zF, data['xData'], data['yData'])
+    HLzF = linear_interpolate(zF, data['xData'], data['Hl'])
+    HVzF = safe_hv_at_y(yF, data['yData'], data['Hv'])
+    HF   = q * HLzF + (1 - q) * HVzF
+    HD   = linear_interpolate(xD, data['xData'], data['Hl'])
+    HW   = linear_interpolate(xB, data['xData'], data['Hl'])
+
+    debug_vals = {'yF': yF, 'HLzF': HLzF, 'HVzF': HVzF, 'HF': HF, 'HD': HD, 'HW': HW}
+    failed = [k for k, v in debug_vals.items() if not np.isfinite(v)]
+    if failed:
+        return {'error': f'Interpolation failed for: {failed}. Values: {debug_vals}'}
 
     D = F * (zF - xB) / (xD - xB)
     W = F - D
 
-    HVxD   = cubic_interpolate(xD, data['yData'], data['Hv'])
-    Qc     = D * (HVxD - HD) * (R + 1)
+    # HVxD: HV at y=xD (distillate is pure liquid, use xD as y approximation)
+    HVxD = safe_hv_at_y(xD, data['yData'], data['Hv'])
+    if not np.isfinite(HVxD):
+        # xD might be outside yData range — clamp to last known value
+        HVxD = data['Hv'][-1] if xD >= data['yData'][-1] else data['Hv'][0]
+
+    Qc      = D * (HVxD - HD) * (R + 1)
     xDeltaR = xD
     HDeltaR = HD + Qc / D
 
@@ -420,12 +448,15 @@ def calculate(data, params):
     HDeltaS = HF + slope * (xDeltaS - zF)
     Qr      = W * (HW - HDeltaS)
 
-    yFMin   = cubic_interpolate(zF, data['xData'], data['yData'])
-    HVyF    = cubic_interpolate(yFMin, data['yData'], data['Hv'])
-    slopeMin = (HVyF - HF) / (yFMin - zF)
+    yFMin  = safe_equil_y(zF, data['xData'], data['yData'])
+    HVyF   = safe_hv_at_y(yFMin, data['yData'], data['Hv'])
+    if not np.isfinite(HVyF):
+        return {'error': f'HVyF interpolation failed: yFMin={yFMin}, yData range=[{data["yData"][0]},{data["yData"][-1]}]'}
+
+    slopeMin        = (HVyF - HF) / (yFMin - zF) if abs(yFMin - zF) > 1e-8 else 0
     QPrimeMin       = HF + slopeMin * (xD - zF)
     QDoublePrimeMin = HF + slopeMin * (xB - zF)
-    RMin    = (QPrimeMin - HVxD) / (HVxD - HD)
+    RMin = (QPrimeMin - HVxD) / (HVxD - HD) if abs(HVxD - HD) > 1e-8 else float('nan')
 
     stage_results = calculate_stages(
         xD, xB, zF, HF, q, R, D, W,
@@ -436,8 +467,8 @@ def calculate(data, params):
 
     x_range   = np.linspace(0, 1, 200).tolist()
     HL_curve  = [linear_interpolate(xi, data['xData'], data['Hl']) for xi in x_range]
-    HV_curve  = [cubic_interpolate(xi, data['yData'], data['Hv']) for xi in x_range]
-    y_equil   = [cubic_interpolate(xi, data['xData'], data['yData']) for xi in x_range]
+    HV_curve  = [safe_hv_at_y(xi, data['yData'], data['Hv']) for xi in x_range]
+    y_equil   = [safe_equil_y(xi, data['xData'], data['yData']) for xi in x_range]
 
     y_vals = data['Hl'] + data['Hv'] + [HF, HD, HW, HDeltaR, HDeltaS, QPrimeMin, QDoublePrimeMin, HVyF]
     y_vals = [v for v in y_vals if np.isfinite(v)]
