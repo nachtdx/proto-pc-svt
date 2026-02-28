@@ -508,7 +508,7 @@ async function runCalculation(inputData) {
 }
 
 // ==========================================
-// CREATE PLOT - PONCHON-SAVARIT (FIXED MATCH)
+// CREATE PLOT - PONCHON-SAVARIT (WITH VLE TIE LINES)
 // ==========================================
 function createPlot(results) {
     console.log('Creating plot with stage compositions:', results.stage_compositions);
@@ -640,132 +640,7 @@ function createPlot(results) {
         });
     }
 
-    // ========== BUILD MATCHED STAGE DATA ==========
-    // Each stage: tie line gives us x_liq (liquid on HL) and y_vap (vapor on HV)
-    // In VLE: point on equilibrium curve is (x_liq, y_vap)
-    // Step in VLE: vertical from (x_liq, y_vap) down to y=x, then horizontal to next x_liq
-
-    const tieLines = results.tie_lines || [];
-    const numStages = tieLines.length;
-
-    // Helper: get H value from curve at composition
-    function getHL(x) {
-        const idx = Math.min(Math.round(x * (results.x_range.length - 1)), results.x_range.length - 1);
-        return results.HL_curve?.[idx] ?? NaN;
-    }
-    function getHV(y) {
-        const idx = Math.min(Math.round(y * (results.x_range.length - 1)), results.x_range.length - 1);
-        return results.HV_curve?.[idx] ?? NaN;
-    }
-
-    // For each stage i, tie_lines[i] = { x: [x_liq, y_vap], y: [HL_xliq, HV_yvap] }
-    // x_liq = tie.x[0], y_vap = tie.x[1]
-    // HL at x_liq, HV at y_vap
-
-    // ========== STAGE TIE LINES + PROJECTION + VLE STEPPING ==========
-    let projLegendAdded = false;
-
-    for (let i = 0; i < numStages; i++) {
-        const tie = tieLines[i];
-        const color = stageColors[i % stageColors.length];
-
-        const x_liq = tie.x[0];   // liquid composition
-        const y_vap = tie.x[1];   // vapor composition (= y on equilibrium)
-        const H_liq = tie.y[0];   // HL at x_liq
-        const H_vap = tie.y[1];   // HV at y_vap
-
-        // --- TIE LINE on H-x-y (horizontal line between liquid and vapor) ---
-        traces.push({
-            x: [x_liq, y_vap],
-            y: [H_liq, H_vap],
-            mode: 'lines',
-            name: `Stage ${i + 1}`,
-            line: { color: color, width: 2.5 },
-            legendgroup: `stage_${i + 1}`,
-            xaxis: 'x', yaxis: 'y'
-        });
-
-        // Endpoints on curves
-        traces.push({
-            x: [x_liq, y_vap],
-            y: [H_liq, H_vap],
-            mode: 'markers',
-            marker: {
-                color: [color, color],
-                size: [10, 10],
-                symbol: ['circle', 'circle'],
-                line: { color: 'white', width: 1.5 }
-            },
-            showlegend: false,
-            legendgroup: `stage_${i + 1}`,
-            xaxis: 'x', yaxis: 'y'
-        });
-
-        // --- PROJECTION LINES: vertical dotted from curves down to bottom of top chart ---
-        // Liquid projection (from HL point down)
-        traces.push({
-            x: [x_liq, x_liq],
-            y: [H_liq, results.yMin],
-            mode: 'lines',
-            name: !projLegendAdded ? 'Projection Lines' : undefined,
-            showlegend: !projLegendAdded,
-            line: { color: color, width: 1.2, dash: 'dot' },
-            legendgroup: `stage_${i + 1}`,
-            xaxis: 'x', yaxis: 'y'
-        });
-        projLegendAdded = true;
-
-        // Vapor projection
-        traces.push({
-            x: [y_vap, y_vap],
-            y: [H_vap, results.yMin],
-            mode: 'lines',
-            showlegend: false,
-            line: { color: color, width: 1.2, dash: 'dot' },
-            legendgroup: `stage_${i + 1}`,
-            xaxis: 'x', yaxis: 'y'
-        });
-
-        // --- VLE DIAGRAM stepping ---
-        // Point on equilibrium curve: (x_liq, y_vap)
-        traces.push({
-            x: [x_liq],
-            y: [y_vap],
-            mode: 'markers',
-            marker: {
-                color: color, size: 10, symbol: 'circle',
-                line: { color: 'white', width: 1.5 }
-            },
-            showlegend: false,
-            legendgroup: `stage_${i + 1}`,
-            xaxis: 'x2', yaxis: 'y2'
-        });
-
-        // Vertical line from (x_liq, y_vap) down to (x_liq, x_liq) [y=x line]
-        traces.push({
-            x: [x_liq, x_liq],
-            y: [y_vap, x_liq],
-            mode: 'lines',
-            line: { color: color, width: 2.5 },
-            showlegend: false,
-            legendgroup: `stage_${i + 1}`,
-            xaxis: 'x2', yaxis: 'y2'
-        });
-
-        // Horizontal step to next stage's x_liq
-        const nextX = (i + 1 < numStages) ? tieLines[i + 1].x[0] : results.xD;
-        traces.push({
-            x: [x_liq, nextX],
-            y: [x_liq, nextX],
-            mode: 'lines',
-            line: { color: color, width: 2.5 },
-            showlegend: false,
-            legendgroup: `stage_${i + 1}`,
-            xaxis: 'x2', yaxis: 'y2'
-        });
-    }
-
-    // ========== VLE EQUILIBRIUM CURVE (bottom) ==========
+    // ========== VLE EQUILIBRIUM CURVE (bottom) — drawn BEFORE stages so stages appear on top ==========
     traces.push({
         x: results.x_range,
         y: results.y_equilibrium,
@@ -783,6 +658,145 @@ function createPlot(results) {
         line: { color: '#9E9E9E', width: 1.5, dash: 'dash' },
         xaxis: 'x2', yaxis: 'y2'
     });
+
+    // ========== STAGE TIE LINES + PROJECTIONS + VLE STEPPING ==========
+    const tieLines = results.tie_lines || [];
+    const numStages = tieLines.length;
+    let projLegendAdded = false;
+
+    for (let i = 0; i < numStages; i++) {
+        const tie = tieLines[i];
+        const color = stageColors[i % stageColors.length];
+
+        // tie.x[0] = x_liq (liquid composition on HL curve)
+        // tie.x[1] = y_vap (vapor composition on HV curve)
+        const x_liq = tie.x[0];
+        const y_vap = tie.x[1];
+        const H_liq = tie.y[0];
+        const H_vap = tie.y[1];
+
+        // -------- H-x-y TIE LINE --------
+        traces.push({
+            x: [x_liq, y_vap],
+            y: [H_liq, H_vap],
+            mode: 'lines',
+            name: `Stage ${i + 1}`,
+            line: { color: color, width: 2.5 },
+            legendgroup: `stage_${i + 1}`,
+            xaxis: 'x', yaxis: 'y'
+        });
+
+        // Endpoints on H-x-y
+        traces.push({
+            x: [x_liq, y_vap],
+            y: [H_liq, H_vap],
+            mode: 'markers',
+            marker: {
+                color: color,
+                size: 10,
+                symbol: 'circle',
+                line: { color: 'white', width: 1.5 }
+            },
+            showlegend: false,
+            legendgroup: `stage_${i + 1}`,
+            xaxis: 'x', yaxis: 'y'
+        });
+
+        // -------- PROJECTION LINES (dotted vertical from H-x-y down) --------
+        traces.push({
+            x: [x_liq, x_liq],
+            y: [H_liq, results.yMin],
+            mode: 'lines',
+            name: !projLegendAdded ? 'Projection Lines' : undefined,
+            showlegend: !projLegendAdded,
+            line: { color: color, width: 1.2, dash: 'dot' },
+            legendgroup: `stage_${i + 1}`,
+            xaxis: 'x', yaxis: 'y'
+        });
+        projLegendAdded = true;
+
+        traces.push({
+            x: [y_vap, y_vap],
+            y: [H_vap, results.yMin],
+            mode: 'lines',
+            showlegend: false,
+            line: { color: color, width: 1.2, dash: 'dot' },
+            legendgroup: `stage_${i + 1}`,
+            xaxis: 'x', yaxis: 'y'
+        });
+
+        // ========== VLE DIAGRAM — match tie line from H-x-y ==========
+        //
+        // In Ponchon-Savarit, the tie line on H-x-y connects:
+        //   liquid point (x_liq, HL) on the HL curve
+        //   vapor point  (y_vap, HV) on the HV curve
+        //
+        // On the VLE diagram (x vs y):
+        //   - Point on equilibrium curve: (x_liq, y_vap)  ← this IS the tie line endpoint
+        //   - The "tie line" on VLE is horizontal: from (x_liq, y_vap) → (y_vap, y_vap)
+        //     because y_vap is in vapor equilibrium with x_liq
+        //   - Then vertical step from (y_vap, y_vap) down to (y_vap, x_next)
+        //     where x_next is the x_liq of the NEXT stage (from operating line)
+
+        // Point on equilibrium curve: (x_liq, y_vap)
+        traces.push({
+            x: [x_liq],
+            y: [y_vap],
+            mode: 'markers',
+            marker: {
+                color: color, size: 10, symbol: 'circle',
+                line: { color: 'white', width: 1.5 }
+            },
+            showlegend: false,
+            legendgroup: `stage_${i + 1}`,
+            xaxis: 'x2', yaxis: 'y2'
+        });
+
+        // TIE LINE on VLE: horizontal from equilibrium point (x_liq, y_vap) to (y_vap, y_vap)
+        // This represents: the vapor y_vap is in equilibrium with liquid x_liq
+        traces.push({
+            x: [x_liq, y_vap],
+            y: [y_vap, y_vap],
+            mode: 'lines',
+            line: { color: color, width: 2, dash: 'solid' },
+            showlegend: false,
+            legendgroup: `stage_${i + 1}`,
+            xaxis: 'x2', yaxis: 'y2'
+        });
+
+        // Point where tie line meets y=x diagonal: (y_vap, y_vap)
+        traces.push({
+            x: [y_vap],
+            y: [y_vap],
+            mode: 'markers',
+            marker: {
+                color: color, size: 8, symbol: 'diamond',
+                line: { color: 'white', width: 1 }
+            },
+            showlegend: false,
+            legendgroup: `stage_${i + 1}`,
+            xaxis: 'x2', yaxis: 'y2'
+        });
+
+        // VERTICAL STEP on VLE: from (y_vap, y_vap) down to y=x of next stage
+        // The next x is either the next tie line's x_liq, or xD if last stage
+        const nextX_liq = (i + 1 < numStages) ? tieLines[i + 1].x[0] : results.xD;
+
+        // Drop from (y_vap, y_vap) to (y_vap, ?) then walk to next x_liq
+        // Actually the correct Ponchon-Savarit VLE stepping is:
+        // From (x_liq, y_vap) on equil curve → horizontal to y=x at (y_vap, y_vap)
+        // → vertical down to next point on equil curve at (x_next_liq, y_vap_step)
+        // But since we step by operating line, just go vertical from y_vap down to next x_liq
+        traces.push({
+            x: [y_vap, y_vap],
+            y: [y_vap, nextX_liq],
+            mode: 'lines',
+            line: { color: color, width: 2 },
+            showlegend: false,
+            legendgroup: `stage_${i + 1}`,
+            xaxis: 'x2', yaxis: 'y2'
+        });
+    }
 
     // ========== LAYOUT ==========
     const containerWidth = document.querySelector('.main-content')?.clientWidth || 1050;
@@ -810,14 +824,13 @@ function createPlot(results) {
         },
         margin: { l: 80, r: 220, t: 70, b: 70 },
 
-        // Top H-x-y
         xaxis: {
             domain: [0.0, 0.95],
             anchor: 'y',
             range: [0, 1],
             tickformat: '.2f',
             showline: true, linecolor: '#555', mirror: true,
-            showgrid: true, gridcolor: '#E0E0E0', gridwidth: 1,
+            showgrid: true, gridcolor: '#E0E0E0',
             zeroline: true, zerolinecolor: '#333', zerolinewidth: 1.5,
             title: ''
         },
@@ -831,14 +844,13 @@ function createPlot(results) {
             zeroline: true, zerolinecolor: '#333', zerolinewidth: 1
         },
 
-        // Bottom VLE
         xaxis2: {
             domain: [0.0, 0.95],
             anchor: 'y2',
             range: [0, 1],
             tickformat: '.2f',
             showline: true, linecolor: '#555', mirror: true,
-            showgrid: true, gridcolor: '#E0E0E0', gridwidth: 1,
+            showgrid: true, gridcolor: '#E0E0E0',
             title: { text: '<b>Mole Fraction (x or y)</b>', font: { size: 13 } }
         },
         yaxis2: {
@@ -1220,6 +1232,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updatePreview();
     initPyodide();
 });
+
 
 
 
