@@ -670,9 +670,12 @@ function updateEnthalpyTable(results) {
 }
 
 // ==========================================
-// CREATE PLOT - PONCHON-SAVARIT
+// CREATE PLOT - PONCHON-SAVARIT - FIXED TRACING
 // ==========================================
 function createPlot(results) {
+    console.log('Creating plot with results:', results);
+    console.log('Stage compositions:', results.stage_compositions);
+    
     const stageColors = [
         '#FF6B6B', '#4ECDC4', '#FF9F1C', '#6A4C93', '#2E86AB', 
         '#A23B72', '#F18F01', '#2D6A4F', '#9E2A2B', '#540D6E'
@@ -683,13 +686,15 @@ function createPlot(results) {
     const isBritish = systemType.includes('ethanol');
     const enthalpyUnit = isBritish ? 'BTU/lbmole' : 'Enthalpy (any units)';
     
+    // ========== KURVA DASAR H-x-y ==========
     traces.push({
         x: results.x_range,
         y: results.HL_curve,
         mode: 'lines',
         name: 'Saturated Liquid',
         line: {color: '#2E86AB', width: 4},
-        xaxis: 'x', yaxis: 'y'
+        xaxis: 'x', 
+        yaxis: 'y'
     });
     
     traces.push({
@@ -698,16 +703,19 @@ function createPlot(results) {
         mode: 'lines',
         name: 'Saturated Vapor',
         line: {color: '#A23B72', width: 4},
-        xaxis: 'x', yaxis: 'y'
+        xaxis: 'x', 
+        yaxis: 'y'
     });
     
+    // ========== GARIS VERTIKAL ==========
     traces.push({
         x: [results.xD, results.xD],
         y: [results.yMin, results.yMax],
         mode: 'lines',
         name: 'x<sub>D</sub>',
         line: {color: '#6C757D', width: 2.5, dash: 'dash'},
-        xaxis: 'x', yaxis: 'y'
+        xaxis: 'x', 
+        yaxis: 'y'
     });
     
     traces.push({
@@ -716,7 +724,8 @@ function createPlot(results) {
         mode: 'lines',
         name: 'x<sub>B</sub>',
         line: {color: '#6C757D', width: 2.5, dash: 'dash'},
-        xaxis: 'x', yaxis: 'y'
+        xaxis: 'x', 
+        yaxis: 'y'
     });
     
     traces.push({
@@ -725,9 +734,11 @@ function createPlot(results) {
         mode: 'lines',
         name: 'z<sub>F</sub>',
         line: {color: '#2D6A4F', width: 3, dash: 'dash'},
-        xaxis: 'x', yaxis: 'y'
+        xaxis: 'x', 
+        yaxis: 'y'
     });
     
+    // ========== DIFFERENCE POINTS ==========
     traces.push({
         x: [results.xDeltaR, results.xDeltaS],
         y: [results.HDeltaR, results.HDeltaS],
@@ -736,59 +747,220 @@ function createPlot(results) {
         marker: {color: '#F97316', size: 14, symbol: 'star'},
         text: ['Δ<sub>R</sub>', 'Δ<sub>S</sub>'],
         textposition: ['top center', 'bottom center'],
-        xaxis: 'x', yaxis: 'y'
+        xaxis: 'x', 
+        yaxis: 'y'
     });
     
+    // ========== OPERATING LINE ==========
     traces.push({
         x: [results.xDeltaR, results.zF, results.xDeltaS],
         y: [results.HDeltaR, results.HF, results.HDeltaS],
         mode: 'lines+markers',
         name: 'Operating Line',
         line: {color: '#0A9396', width: 3},
-        xaxis: 'x', yaxis: 'y'
+        xaxis: 'x', 
+        yaxis: 'y'
     });
     
+    // ========== MINIMUM REFLUX LINE ==========
+    if (results.yFMin && results.HVyF) {
+        traces.push({
+            x: [results.xB, results.zF, results.yFMin, results.xD],
+            y: [results.QDoublePrimeMin, results.HF, results.HVyF, results.QPrimeMin],
+            mode: 'lines+markers',
+            name: 'Minimum Reflux Line',
+            line: {color: '#E9C46A', width: 2.5, dash: 'dash'},
+            xaxis: 'x', 
+            yaxis: 'y'
+        });
+    }
+    
+    // ========== VLE CURVE DI SUBPLOT BAWAH ==========
     traces.push({
         x: results.x_range,
         y: results.y_equilibrium,
         mode: 'lines',
         name: 'Equilibrium Curve',
         line: {color: '#1E1E1E', width: 3.5},
-        xaxis: 'x2', yaxis: 'y2'
+        xaxis: 'x2', 
+        yaxis: 'y2'
     });
     
+    // ========== y = x LINE ==========
     traces.push({
         x: [0, 1],
         y: [0, 1],
         mode: 'lines',
         name: 'y = x',
         line: {color: '#6C757D', width: 2, dash: 'dash'},
-        xaxis: 'x2', yaxis: 'y2'
+        xaxis: 'x2', 
+        yaxis: 'y2'
     });
     
+    // ========== STAGE TRACING DI SUBPLOT BAWAH ==========
+    if (results.stage_compositions && results.stage_compositions.length > 0) {
+        console.log('Plotting stage compositions:', results.stage_compositions);
+        
+        // Plot garis vertikal dan horizontal untuk setiap stage
+        for (let i = 0; i < results.stage_compositions.length - 1; i++) {
+            const stage = results.stage_compositions[i];
+            const nextStage = results.stage_compositions[i + 1];
+            const color = stageColors[i % stageColors.length];
+            
+            // Garis vertikal dari (x, y) ke (x, x) - turun ke garis y=x
+            traces.push({
+                x: [stage.x, stage.x],
+                y: [stage.y, stage.x],
+                mode: 'lines',
+                line: {color: color, width: 2},
+                showlegend: false,
+                xaxis: 'x2', 
+                yaxis: 'y2'
+            });
+            
+            // Garis horizontal dari (x, x) ke (next x, next x) - mengikuti garis y=x
+            traces.push({
+                x: [stage.x, nextStage.x],
+                y: [stage.x, nextStage.x],
+                mode: 'lines',
+                line: {color: color, width: 2},
+                showlegend: false,
+                xaxis: 'x2', 
+                yaxis: 'y2'
+            });
+            
+            // Titik untuk stage
+            traces.push({
+                x: [stage.x],
+                y: [stage.y],
+                mode: 'markers',
+                marker: {color: color, size: 10, symbol: 'circle'},
+                name: i === 0 ? 'Stage Points' : undefined,
+                showlegend: i === 0,
+                xaxis: 'x2', 
+                yaxis: 'y2'
+            });
+        }
+        
+        // Tambahkan titik terakhir
+        const lastStage = results.stage_compositions[results.stage_compositions.length - 1];
+        traces.push({
+            x: [lastStage.x],
+            y: [lastStage.y],
+            mode: 'markers',
+            marker: {color: stageColors[(results.stage_compositions.length - 1) % stageColors.length], size: 10, symbol: 'circle'},
+            showlegend: false,
+            xaxis: 'x2', 
+            yaxis: 'y2'
+        });
+    } else {
+        console.warn('No stage compositions to plot');
+    }
+    
+    // ========== GARIS PROYEKSI ==========
+    if (results.stage_compositions && results.stage_compositions.length > 0) {
+        for (let i = 0; i < results.stage_compositions.length; i++) {
+            const stage = results.stage_compositions[i];
+            const color = stageColors[i % stageColors.length];
+            
+            // Cari enthalpy yang sesuai di kurva
+            const idxLiq = Math.round(stage.x * 199);
+            const idxVap = Math.round(stage.y * 199);
+            const H_liq_stage = results.HL_curve ? results.HL_curve[idxLiq] : null;
+            const H_vap_stage = results.HV_curve ? results.HV_curve[idxVap] : null;
+            
+            if (H_liq_stage && H_vap_stage) {
+                // Proyeksi liquid dari diagram atas ke bawah
+                traces.push({
+                    x: [stage.x, stage.x],
+                    y: [H_liq_stage, results.yMin],
+                    mode: 'lines',
+                    showlegend: false,
+                    line: {color: color, width: 1.5, dash: 'dot'},
+                    xaxis: 'x', 
+                    yaxis: 'y'
+                });
+                
+                // Proyeksi vapor dari diagram atas ke bawah
+                traces.push({
+                    x: [stage.y, stage.y],
+                    y: [H_vap_stage, results.yMin],
+                    mode: 'lines',
+                    showlegend: false,
+                    line: {color: color, width: 1.5, dash: 'dot'},
+                    xaxis: 'x', 
+                    yaxis: 'y'
+                });
+            }
+        }
+    }
+    
+    // ========== LAYOUT ==========
     const layout = {
-        title: { text: '<b>Ponchon–Savarit Diagram</b>', font: {size: 18}, x: 0.5 },
-        grid: { rows: 2, columns: 1, pattern: 'independent' },
+        title: { 
+            text: '<b>Ponchon–Savarit Diagram: Binary Distillation Analysis</b>', 
+            font: {size: 18}, 
+            x: 0.5 
+        },
+        grid: { 
+            rows: 2, 
+            columns: 1, 
+            pattern: 'independent',
+            roworder: 'top to bottom'
+        },
         margin: { l: 70, r: 130, t: 50, b: 70 },
-        xaxis: { domain: [0.1, 0.9], range: [0, 1], tickformat: '.2f' },
+        xaxis: { 
+            domain: [0.1, 0.9], 
+            range: [0, 1], 
+            tickformat: '.2f',
+            title: '',
+            showline: true
+        },
         yaxis: { 
             domain: [0.5, 0.95], 
             title: `<b>Enthalpy (${enthalpyUnit})</b>`,
-            range: [results.yMin, results.yMax] 
+            range: [results.yMin, results.yMax],
+            showline: true
         },
-        xaxis2: { domain: [0.1, 0.9], title: '<b>Mole Fraction</b>', range: [0, 1] },
-        yaxis2: { domain: [0.05, 0.45], title: '<b>y (Vapor Fraction)</b>', range: [0, 1] },
+        xaxis2: { 
+            domain: [0.1, 0.9], 
+            title: '<b>Mole Fraction (x or y)</b>', 
+            range: [0, 1],
+            tickformat: '.2f',
+            showline: true
+        },
+        yaxis2: { 
+            domain: [0.05, 0.45], 
+            title: '<b>y (Vapor Fraction)</b>', 
+            range: [0, 1],
+            showline: true
+        },
+        legend: {
+            x: 1.02,
+            y: 1,
+            xanchor: 'left',
+            yanchor: 'top',
+            font: {size: 9}
+        },
         height: 700,
         width: document.querySelector('.main-content')?.clientWidth - 40 || 1000
     };
 
     Plotly.newPlot('plotDiv', traces, layout, {responsive: true});
+    
+    window.addEventListener('resize', () => {
+        const containerWidth = document.querySelector('.main-content')?.clientWidth || 900;
+        Plotly.relayout('plotDiv', {width: containerWidth - 40});
+    });
 }
 
 // ==========================================
-// DISPLAY RESULTS
+// DISPLAY RESULTS - DENGAN DEBUG
 // ==========================================
 function displayResults(results) {
+    console.log('Displaying results:', results);
+    console.log('Stage compositions length:', results.stage_compositions?.length);
+    
     createPlot(results);
     updateQuickSummary(results);
     updateEnthalpyTable(results);
@@ -798,28 +970,40 @@ function displayResults(results) {
     const enthalpyUnit = isBritish ? 'BTU/lbmole' : 'MJ/kmol';
     const flowUnit = isBritish ? 'lbmol/hr' : 'kmol/hr';
     
-    const summaryHtml = `
-        <tr><td>Distillate Flow (D)</td><td>${results.D} ${flowUnit}</td></tr>
-        <tr><td>Bottoms Flow (W)</td><td>${results.W} ${flowUnit}</td></tr>
-        <tr><td>Δ_R</td><td>(${results.xDeltaR}, ${results.HDeltaR} ${enthalpyUnit})</td></tr>
-        <tr><td>Δ_S</td><td>(${results.xDeltaS}, ${results.HDeltaS} ${enthalpyUnit})</td></tr>
-        <tr><td>Condenser Duty</td><td>${results.QcKW} kW</td></tr>
-        <tr><td>Reboiler Duty</td><td>${results.QrKW} kW</td></tr>
-        <tr><td>Stages</td><td>${results.stages}</td></tr>
-        <tr><td>Feed Stage</td><td>${results.feed_stage}</td></tr>
-        <tr><td>R min</td><td>${results.RMin}</td></tr>
-    `;
-    document.getElementById('summaryBody').innerHTML = summaryHtml;
-    
-    let stagesRows = '';
-    if (results.stage_compositions) {
-        results.stage_compositions.forEach((stage, i) => {
-            stagesRows += `<tr><td>Stage ${i+1}</td><td>${stage.x.toFixed(4)}</td><td>${stage.y.toFixed(4)}</td></tr>`;
-        });
+    // Summary table
+    const summaryBody = document.getElementById('summaryBody');
+    if (summaryBody) {
+        const summaryHtml = `
+            <tr><td>Distillate Flow (D)</td><td>${results.D} ${flowUnit}</td></tr>
+            <tr><td>Bottoms Flow (W)</td><td>${results.W} ${flowUnit}</td></tr>
+            <tr><td>Δ_R</td><td>(${results.xDeltaR}, ${results.HDeltaR} ${enthalpyUnit})</td></tr>
+            <tr><td>Δ_S</td><td>(${results.xDeltaS}, ${results.HDeltaS} ${enthalpyUnit})</td></tr>
+            <tr><td>Condenser Duty</td><td>${results.QcKW} kW</td></tr>
+            <tr><td>Reboiler Duty</td><td>${results.QrKW} kW</td></tr>
+            <tr><td>Stages</td><td>${results.stages}</td></tr>
+            <tr><td>Feed Stage</td><td>${results.feed_stage}</td></tr>
+            <tr><td>R min</td><td>${results.RMin}</td></tr>
+        `;
+        summaryBody.innerHTML = summaryHtml;
     }
-    document.getElementById('stagesBody').innerHTML = stagesRows;
     
-    document.getElementById('exportBtn').disabled = false;
+    // Stages table
+    const stagesBody = document.getElementById('stagesBody');
+    if (stagesBody) {
+        let stagesRows = '';
+        if (results.stage_compositions && results.stage_compositions.length > 0) {
+            results.stage_compositions.forEach((stage, i) => {
+                stagesRows += `<tr><td>Stage ${i+1}</td><td>${stage.x.toFixed(4)}</td><td>${stage.y.toFixed(4)}</td></tr>`;
+            });
+        } else {
+            stagesRows = '<tr><td colspan="3" class="text-center text-muted">No stage data available</td></tr>';
+        }
+        stagesBody.innerHTML = stagesRows;
+    }
+    
+    const exportBtn = document.getElementById('exportBtn');
+    if (exportBtn) exportBtn.disabled = false;
+    
     currentResults = results;
     showToast('✅ Calculation completed!', 'success');
 }
@@ -1000,6 +1184,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updatePreview();
     initPyodide();
 });
+
 
 
 
