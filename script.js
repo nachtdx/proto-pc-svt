@@ -508,7 +508,7 @@ async function runCalculation(inputData) {
 }
 
 // ==========================================
-// CREATE PLOT - PONCHON-SAVARIT (WITH VLE TIE LINES)
+// CREATE PLOT - PONCHON-SAVARIT (VLE TIE LINE FIXED DIRECTION)
 // ==========================================
 function createPlot(results) {
     console.log('Creating plot with stage compositions:', results.stage_compositions);
@@ -534,44 +534,37 @@ function createPlot(results) {
     const isBritish = systemType.includes('ethanol');
     const enthalpyUnit = isBritish ? 'BTU/lbmole' : 'MJ/kmol';
 
-    // ========== SATURATED LIQUID & VAPOR CURVES (top H-x-y) ==========
+    // ========== SATURATED LIQUID & VAPOR CURVES ==========
     traces.push({
-        x: results.x_range,
-        y: results.HL_curve,
-        mode: 'lines',
-        name: 'Saturated Liquid',
+        x: results.x_range, y: results.HL_curve,
+        mode: 'lines', name: 'Saturated Liquid',
         line: { color: '#1565C0', width: 3 },
         xaxis: 'x', yaxis: 'y'
     });
-
     traces.push({
-        x: results.x_range,
-        y: results.HV_curve,
-        mode: 'lines',
-        name: 'Saturated Vapor',
+        x: results.x_range, y: results.HV_curve,
+        mode: 'lines', name: 'Saturated Vapor',
         line: { color: '#880E4F', width: 3 },
         xaxis: 'x', yaxis: 'y'
     });
 
-    // ========== VERTICAL DASHED LINES xD, xB, zF — both plots ==========
+    // ========== VERTICAL DASHED LINES xD, xB, zF ==========
     const verticals = [
-        { val: results.xD, label: 'x<sub>D</sub>', color: '#9E9E9E', dash: 'dash' },
-        { val: results.xB, label: 'x<sub>B</sub>', color: '#9E9E9E', dash: 'dash' },
-        { val: results.zF, label: 'z<sub>F</sub> (Feed)', color: '#2E7D32', dash: 'dash' }
+        { val: results.xD, label: 'x<sub>D</sub>', color: '#9E9E9E' },
+        { val: results.xB, label: 'x<sub>B</sub>', color: '#9E9E9E' },
+        { val: results.zF, label: 'z<sub>F</sub> (Feed)', color: '#2E7D32' }
     ];
-
     verticals.forEach(v => {
         traces.push({
             x: [v.val, v.val], y: [results.yMin, results.yMax],
             mode: 'lines', name: v.label,
-            line: { color: v.color, width: 2, dash: v.dash },
-            showlegend: true,
+            line: { color: v.color, width: 2, dash: 'dash' },
             xaxis: 'x', yaxis: 'y'
         });
         traces.push({
             x: [v.val, v.val], y: [-0.05, 1.05],
             mode: 'lines', showlegend: false,
-            line: { color: v.color, width: 2, dash: v.dash },
+            line: { color: v.color, width: 2, dash: 'dash' },
             xaxis: 'x2', yaxis: 'y2'
         });
     });
@@ -580,19 +573,17 @@ function createPlot(results) {
     traces.push({
         x: [results.xDeltaR, results.zF, results.xDeltaS],
         y: [results.HDeltaR, results.HF, results.HDeltaS],
-        mode: 'lines+markers',
-        name: 'Operating Line',
+        mode: 'lines+markers', name: 'Operating Line',
         line: { color: '#00897B', width: 2.5 },
         marker: { size: 7, color: '#00897B' },
         xaxis: 'x', yaxis: 'y'
     });
 
-    // ========== DIFFERENCE POINTS ΔR and ΔS ==========
+    // ========== DIFFERENCE POINTS ==========
     traces.push({
         x: [results.xDeltaR, results.xDeltaS],
         y: [results.HDeltaR, results.HDeltaS],
-        mode: 'markers+text',
-        name: 'Difference Points',
+        mode: 'markers+text', name: 'Difference Points',
         marker: { color: '#FF6D00', size: 16, symbol: 'star' },
         text: ['Δ<sub>R</sub>', 'Δ<sub>S</sub>'],
         textposition: ['top center', 'bottom center'],
@@ -605,23 +596,19 @@ function createPlot(results) {
         traces.push({
             x: [results.xB, results.zF, results.yFMin, results.xD],
             y: [results.QDoublePrimeMin, results.HF, results.HVyF, results.QPrimeMin],
-            mode: 'lines+markers',
-            name: 'Minimum Reflux Line',
+            mode: 'lines+markers', name: 'Minimum Reflux Line',
             line: { color: '#F9A825', width: 2, dash: 'dash' },
             marker: { size: 7, color: '#F9A825', symbol: 'diamond' },
             xaxis: 'x', yaxis: 'y'
         });
-
         traces.push({
             x: [results.xD, results.xB],
             y: [results.QPrimeMin, results.QDoublePrimeMin],
-            mode: 'markers+text',
-            name: 'Min Diff Points',
+            mode: 'markers+text', name: 'Min Diff Points',
             marker: { color: '#F9A825', size: 12, symbol: 'diamond' },
             text: ["Δ'<sub>R,min</sub>", "Δ'<sub>S,min</sub>"],
             textposition: ['top right', 'bottom left'],
             textfont: { size: 11, color: '#F9A825' },
-            showlegend: true,
             xaxis: 'x', yaxis: 'y'
         });
     }
@@ -630,8 +617,7 @@ function createPlot(results) {
     if (results.construction_lines?.length) {
         results.construction_lines.forEach((cl, i) => {
             traces.push({
-                x: cl.x, y: cl.y,
-                mode: 'lines',
+                x: cl.x, y: cl.y, mode: 'lines',
                 name: i === 0 ? 'Construction Line 1' : undefined,
                 showlegend: i === 0,
                 line: { color: '#BDBDBD', width: 1.5, dash: 'dot' },
@@ -640,12 +626,10 @@ function createPlot(results) {
         });
     }
 
-    // ========== VLE EQUILIBRIUM CURVE (bottom) — drawn BEFORE stages so stages appear on top ==========
+    // ========== VLE EQUILIBRIUM CURVE (drawn first, behind stages) ==========
     traces.push({
-        x: results.x_range,
-        y: results.y_equilibrium,
-        mode: 'lines',
-        name: 'Equilibrium Curve',
+        x: results.x_range, y: results.y_equilibrium,
+        mode: 'lines', name: 'Equilibrium Curve',
         line: { color: '#1A1A1A', width: 3.5 },
         xaxis: 'x2', yaxis: 'y2'
     });
@@ -653,8 +637,7 @@ function createPlot(results) {
     // ========== y = x DIAGONAL ==========
     traces.push({
         x: [0, 1], y: [0, 1],
-        mode: 'lines',
-        name: 'y = x',
+        mode: 'lines', name: 'y = x',
         line: { color: '#9E9E9E', width: 1.5, dash: 'dash' },
         xaxis: 'x2', yaxis: 'y2'
     });
@@ -668,44 +651,31 @@ function createPlot(results) {
         const tie = tieLines[i];
         const color = stageColors[i % stageColors.length];
 
-        // tie.x[0] = x_liq (liquid composition on HL curve)
-        // tie.x[1] = y_vap (vapor composition on HV curve)
-        const x_liq = tie.x[0];
-        const y_vap = tie.x[1];
+        // tie.x[0] = x_liq, tie.x[1] = y_vap
+        const x_liq = tie.x[0];   // liquid composition → on HL curve
+        const y_vap = tie.x[1];   // vapor composition → on HV curve
         const H_liq = tie.y[0];
         const H_vap = tie.y[1];
 
-        // -------- H-x-y TIE LINE --------
+        // ── H-x-y: TIE LINE ──
         traces.push({
-            x: [x_liq, y_vap],
-            y: [H_liq, H_vap],
-            mode: 'lines',
-            name: `Stage ${i + 1}`,
+            x: [x_liq, y_vap], y: [H_liq, H_vap],
+            mode: 'lines', name: `Stage ${i + 1}`,
             line: { color: color, width: 2.5 },
             legendgroup: `stage_${i + 1}`,
             xaxis: 'x', yaxis: 'y'
         });
-
-        // Endpoints on H-x-y
         traces.push({
-            x: [x_liq, y_vap],
-            y: [H_liq, H_vap],
+            x: [x_liq, y_vap], y: [H_liq, H_vap],
             mode: 'markers',
-            marker: {
-                color: color,
-                size: 10,
-                symbol: 'circle',
-                line: { color: 'white', width: 1.5 }
-            },
-            showlegend: false,
-            legendgroup: `stage_${i + 1}`,
+            marker: { color: color, size: 10, symbol: 'circle', line: { color: 'white', width: 1.5 } },
+            showlegend: false, legendgroup: `stage_${i + 1}`,
             xaxis: 'x', yaxis: 'y'
         });
 
-        // -------- PROJECTION LINES (dotted vertical from H-x-y down) --------
+        // ── H-x-y: PROJECTION LINES (dotted vertical down) ──
         traces.push({
-            x: [x_liq, x_liq],
-            y: [H_liq, results.yMin],
+            x: [x_liq, x_liq], y: [H_liq, results.yMin],
             mode: 'lines',
             name: !projLegendAdded ? 'Projection Lines' : undefined,
             showlegend: !projLegendAdded,
@@ -716,84 +686,82 @@ function createPlot(results) {
         projLegendAdded = true;
 
         traces.push({
-            x: [y_vap, y_vap],
-            y: [H_vap, results.yMin],
-            mode: 'lines',
-            showlegend: false,
+            x: [y_vap, y_vap], y: [H_vap, results.yMin],
+            mode: 'lines', showlegend: false,
             line: { color: color, width: 1.2, dash: 'dot' },
             legendgroup: `stage_${i + 1}`,
             xaxis: 'x', yaxis: 'y'
         });
 
-        // ========== VLE DIAGRAM — match tie line from H-x-y ==========
+        // ══════════════════════════════════════════════════════
+        // VLE DIAGRAM — Ponchon-Savarit stage construction
         //
-        // In Ponchon-Savarit, the tie line on H-x-y connects:
-        //   liquid point (x_liq, HL) on the HL curve
-        //   vapor point  (y_vap, HV) on the HV curve
+        // For each stage i, the tie line in H-x-y connects:
+        //   liquid (x_liq, HL)  ←→  vapor (y_vap, HV)
         //
-        // On the VLE diagram (x vs y):
-        //   - Point on equilibrium curve: (x_liq, y_vap)  ← this IS the tie line endpoint
-        //   - The "tie line" on VLE is horizontal: from (x_liq, y_vap) → (y_vap, y_vap)
-        //     because y_vap is in vapor equilibrium with x_liq
-        //   - Then vertical step from (y_vap, y_vap) down to (y_vap, x_next)
-        //     where x_next is the x_liq of the NEXT stage (from operating line)
+        // On VLE x-y diagram, this maps to:
+        //   Point A = (x_liq, y_vap)  on the equilibrium curve
+        //   Point B = (y_vap, y_vap)  on the y=x diagonal
+        //
+        // Tie line on VLE = horizontal line A → B  (rightward, since y_vap > x_liq)
+        //
+        // Then the operating line gives us the NEXT liquid composition x_next:
+        //   Point C = (y_vap, x_next)  on the operating line (y_vap as vapor entering next stage)
+        //   This is a VERTICAL line B → C going downward (from y_vap to x_next on y-axis)
+        //
+        // x_next = x_liq of the NEXT tie line (stage i+1), or xD if first stage going up
+        // ══════════════════════════════════════════════════════
 
-        // Point on equilibrium curve: (x_liq, y_vap)
+        // Get next stage's x_liq (for the vertical step on operating line)
+        // Stages go from bottom (xB) to top (xD), so "next" toward xD means i-1 in reverse order
+        // But tie_lines are ordered from top (xD side) to bottom (xB side) based on Python code
+        // So next stage liquid is tieLines[i+1].x[0], last stage goes to xD
+        const x_next = (i + 1 < numStages) ? tieLines[i + 1].x[0] : results.xD;
+
+        // Point A on equilibrium curve: (x_liq, y_vap)
         traces.push({
-            x: [x_liq],
-            y: [y_vap],
+            x: [x_liq], y: [y_vap],
             mode: 'markers',
-            marker: {
-                color: color, size: 10, symbol: 'circle',
-                line: { color: 'white', width: 1.5 }
-            },
-            showlegend: false,
-            legendgroup: `stage_${i + 1}`,
+            marker: { color: color, size: 10, symbol: 'circle', line: { color: 'white', width: 1.5 } },
+            showlegend: false, legendgroup: `stage_${i + 1}`,
             xaxis: 'x2', yaxis: 'y2'
         });
 
-        // TIE LINE on VLE: horizontal from equilibrium point (x_liq, y_vap) to (y_vap, y_vap)
-        // This represents: the vapor y_vap is in equilibrium with liquid x_liq
+        // TIE LINE on VLE: horizontal from (x_liq, y_vap) → RIGHT to (y_vap, y_vap)
+        // Direction is to the RIGHT because y_vap > x_liq (vapor enriched vs liquid)
         traces.push({
-            x: [x_liq, y_vap],
-            y: [y_vap, y_vap],
+            x: [x_liq, y_vap], y: [y_vap, y_vap],
             mode: 'lines',
-            line: { color: color, width: 2, dash: 'solid' },
-            showlegend: false,
-            legendgroup: `stage_${i + 1}`,
+            line: { color: color, width: 2.5 },
+            showlegend: false, legendgroup: `stage_${i + 1}`,
             xaxis: 'x2', yaxis: 'y2'
         });
 
-        // Point where tie line meets y=x diagonal: (y_vap, y_vap)
+        // Point B on y=x diagonal: (y_vap, y_vap)
         traces.push({
-            x: [y_vap],
-            y: [y_vap],
+            x: [y_vap], y: [y_vap],
             mode: 'markers',
-            marker: {
-                color: color, size: 8, symbol: 'diamond',
-                line: { color: 'white', width: 1 }
-            },
-            showlegend: false,
-            legendgroup: `stage_${i + 1}`,
+            marker: { color: color, size: 8, symbol: 'diamond', line: { color: 'white', width: 1 } },
+            showlegend: false, legendgroup: `stage_${i + 1}`,
             xaxis: 'x2', yaxis: 'y2'
         });
 
-        // VERTICAL STEP on VLE: from (y_vap, y_vap) down to y=x of next stage
-        // The next x is either the next tie line's x_liq, or xD if last stage
-        const nextX_liq = (i + 1 < numStages) ? tieLines[i + 1].x[0] : results.xD;
-
-        // Drop from (y_vap, y_vap) to (y_vap, ?) then walk to next x_liq
-        // Actually the correct Ponchon-Savarit VLE stepping is:
-        // From (x_liq, y_vap) on equil curve → horizontal to y=x at (y_vap, y_vap)
-        // → vertical down to next point on equil curve at (x_next_liq, y_vap_step)
-        // But since we step by operating line, just go vertical from y_vap down to next x_liq
+        // OPERATING LINE STEP on VLE: vertical from (y_vap, y_vap) DOWN to (y_vap, x_next)
+        // This represents moving from vapor y_vap to the next stage liquid x_next
         traces.push({
-            x: [y_vap, y_vap],
-            y: [y_vap, nextX_liq],
+            x: [y_vap, y_vap], y: [y_vap, x_next],
             mode: 'lines',
-            line: { color: color, width: 2 },
-            showlegend: false,
-            legendgroup: `stage_${i + 1}`,
+            line: { color: color, width: 2.5 },
+            showlegend: false, legendgroup: `stage_${i + 1}`,
+            xaxis: 'x2', yaxis: 'y2'
+        });
+
+        // Point C on operating line: (y_vap, x_next) — connect to next stage's equilibrium
+        traces.push({
+            x: [y_vap], y: [x_next],
+            mode: 'markers',
+            marker: { color: color, size: 7, symbol: 'circle-open', line: { color: color, width: 2 } },
+            showlegend: false, legendgroup: `stage_${i + 1}`,
             xaxis: 'x2', yaxis: 'y2'
         });
     }
@@ -807,71 +775,55 @@ function createPlot(results) {
             font: { size: 18, family: 'Arial, sans-serif' },
             x: 0.5, xanchor: 'center'
         },
-        annotations: [
-            {
-                text: '<b>Ponchon–Savarit Diagram (H-x-y)</b>',
-                xref: 'paper', yref: 'paper',
-                x: 0.5, y: 0.995,
-                xanchor: 'center', yanchor: 'top',
-                showarrow: false,
-                font: { size: 12, color: '#1565C0' }
-            }
-        ],
-        grid: {
-            rows: 2, columns: 1,
-            pattern: 'independent',
-            roworder: 'top to bottom'
-        },
+        annotations: [{
+            text: '<b>Ponchon–Savarit Diagram (H-x-y)</b>',
+            xref: 'paper', yref: 'paper',
+            x: 0.5, y: 0.995,
+            xanchor: 'center', yanchor: 'top',
+            showarrow: false,
+            font: { size: 12, color: '#1565C0' }
+        }],
+        grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
         margin: { l: 80, r: 220, t: 70, b: 70 },
 
         xaxis: {
-            domain: [0.0, 0.95],
-            anchor: 'y',
-            range: [0, 1],
-            tickformat: '.2f',
+            domain: [0.0, 0.95], anchor: 'y',
+            range: [0, 1], tickformat: '.2f',
             showline: true, linecolor: '#555', mirror: true,
             showgrid: true, gridcolor: '#E0E0E0',
             zeroline: true, zerolinecolor: '#333', zerolinewidth: 1.5,
             title: ''
         },
         yaxis: {
-            domain: [0.52, 0.97],
-            anchor: 'x',
+            domain: [0.52, 0.97], anchor: 'x',
             title: { text: `<b>Enthalpy (${enthalpyUnit})</b>`, font: { size: 13 } },
             range: [results.yMin, results.yMax],
             showline: true, linecolor: '#555', mirror: true,
             showgrid: true, gridcolor: '#E0E0E0',
             zeroline: true, zerolinecolor: '#333', zerolinewidth: 1
         },
-
         xaxis2: {
-            domain: [0.0, 0.95],
-            anchor: 'y2',
-            range: [0, 1],
-            tickformat: '.2f',
+            domain: [0.0, 0.95], anchor: 'y2',
+            range: [0, 1], tickformat: '.2f',
             showline: true, linecolor: '#555', mirror: true,
             showgrid: true, gridcolor: '#E0E0E0',
             title: { text: '<b>Mole Fraction (x or y)</b>', font: { size: 13 } }
         },
         yaxis2: {
-            domain: [0.03, 0.48],
-            anchor: 'x2',
+            domain: [0.03, 0.48], anchor: 'x2',
             title: { text: '<b>y (Vapor Fraction)</b>', font: { size: 13 } },
             range: [0, 1.02],
             showline: true, linecolor: '#555', mirror: true,
             showgrid: true, gridcolor: '#E0E0E0',
             zeroline: true, zerolinecolor: '#333', zerolinewidth: 1
         },
-
         legend: {
-            x: 1.01, y: 1.0,
-            xanchor: 'left', yanchor: 'top',
+            x: 1.01, y: 1.0, xanchor: 'left', yanchor: 'top',
             font: { size: 10, family: 'Arial, sans-serif' },
             bgcolor: 'rgba(255,255,255,0.95)',
             bordercolor: '#BDBDBD', borderwidth: 1,
             tracegroupgap: 1
         },
-
         plot_bgcolor: '#FAFAFA',
         paper_bgcolor: '#FFFFFF',
         height: 780,
@@ -1232,6 +1184,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updatePreview();
     initPyodide();
 });
+
 
 
 
