@@ -265,7 +265,9 @@ from scipy.interpolate import interp1d, CubicSpline
 from scipy.optimize import root_scalar
 import json
 
-# ── helpers ────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════
+#  Helpers
+# ══════════════════════════════════════════════════════════
 
 def linear_interpolate(x, x_val, y_val):
     x_val = list(x_val); y_val = list(y_val)
@@ -277,231 +279,316 @@ def linear_interpolate(x, x_val, y_val):
     return float(f(x))
 
 def cubic_interpolate(x, x_val, y_val):
+    """cubic interp; falls back to linear on error"""
     x_val = list(x_val); y_val = list(y_val)
     if len(x_val) != len(y_val) or len(x_val) < 2:
         return float('nan')
     if x < x_val[0] or x > x_val[-1]:
-        return float('nan')
+        return linear_interpolate(x, x_val, y_val)
     try:
         cs = CubicSpline(x_val, y_val, extrapolate=False)
-        return float(cs(x))
+        v  = float(cs(x))
+        return v if np.isfinite(v) else linear_interpolate(x, x_val, y_val)
     except Exception:
         return linear_interpolate(x, x_val, y_val)
 
+def safe_hv_at_y(y, yData, Hv):
+    """HV at vapor composition y — always linear (safe for flat yData like NH3)."""
+    return linear_interpolate(y, yData, Hv)
+
 def safe_equil_y(x, xData, yData):
-    """Equilibrium y at liquid composition x. Cubic → fallback linear."""
+    """Equilibrium y at x — cubic then fallback linear."""
     v = cubic_interpolate(x, xData, yData)
     if not np.isfinite(v):
         v = linear_interpolate(x, xData, yData)
     return v
 
-def safe_hv_at_y(y, yData, Hv):
-    """HV at vapor composition y. Always linear — yData can be near-flat."""
-    return linear_interpolate(y, yData, Hv)
-
-def equil_x_from_y(y_target, xData, yData):
-    """Inverse lookup: given y_target find x on equilibrium curve (y -> x)."""
-    # Build unique, strictly-increasing (y,x) pairs
-    pairs = sorted(zip(yData, xData), key=lambda p: p[0])
-    ys_u, xs_u = [], []
-    for yv, xv in pairs:
-        if not ys_u or yv > ys_u[-1]:
-            ys_u.append(yv); xs_u.append(xv)
-    if y_target <= ys_u[0]:  return float(xs_u[0])
-    if y_target >= ys_u[-1]: return float(xs_u[-1])
-    f = interp1d(ys_u, xs_u, kind='linear')
-    return float(f(y_target))
-
-# ── stage stepping ──────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════
+#  Stage Stepping  (persis dari Ponchon-Savarit-Generator.py)
+# ══════════════════════════════════════════════════════════
 
 def calculate_stages(xD, xB, zF, HF, q, R, D, W,
                      xDeltaR, HDeltaR, xDeltaS, HDeltaS, data):
     y = xD
     stages = 0
-    tie_lines, construction_lines, stage_compositions = [], [], []
+    stage_points       = [{'x': float(xD),
+                            'y': float(cubic_interpolate(xD, data['yData'], data['Hv']))}]
+    tie_lines          = []
+    construction_lines = []
+    stage_compositions = []
     in_rectifying = True
-    feed_stage = 0
+    feed_stage    = 0
+    error         = ""
 
-    stage_compositions.append({'x': float(xD), 'y': float(xD)})
-
-    while stages < 25:
-        # Get liquid x from vapor y (inverse equilibrium)
+    while stages < 100:
+        # ── 1. Find x_n from y_n via equilibrium (root_scalar bisect) ──────
+        def find_x(xi):
+            return cubic_interpolate(xi, data['xData'], data['yData']) - y
         try:
-            x_n = equil_x_from_y(y, data['xData'], data['yData'])
-        except Exception:
+            sol = root_scalar(find_x, bracket=[1e-9, 1.0 - 1e-9], method='bisect')
+            if not sol.converged:
+                error = f"Stage {stages+1}: root_scalar did not converge finding x from y={y:.4f}"
+                break
+            x_n = float(sol.root)
+        except Exception as e:
+            error = f"Stage {stages+1}: exception finding x from y={y:.4f}: {e}"
             break
-        if not np.isfinite(x_n): break
 
+        if not np.isfinite(x_n):
+            error = f"Stage {stages+1}: x_n not finite."
+            break
+
+        # ── Check if we've reached xB ────────────────────────────────────────
         if x_n <= xB:
-            stage_compositions.append({'x': float(xB), 'y': float(y)})
-            stages += 1
+            HLxB = linear_interpolate(xB, data['xData'], data['Hl'])
+            if np.isfinite(HLxB):
+                stage_points.append({'x': float(xB), 'y': float(HLxB)})
+                HVy = cubic_interpolate(y, data['yData'], data['Hv'])
+                tie_lines.append({
+                    'x': [float(xB), float(y)],
+                    'y': [float(HLxB), float(HVy) if np.isfinite(HVy) else float(HLxB)]
+                })
+                stage_compositions.append({'x': float(xB), 'y': float(y)})
+                stages += 1
             break
 
+        # ── 2. Enthalpies at (x_n, y) ────────────────────────────────────────
         HLx_n = linear_interpolate(x_n, data['xData'], data['Hl'])
-        HVy_n = safe_hv_at_y(y, data['yData'], data['Hv'])
+        HVy_n = cubic_interpolate(y,   data['yData'], data['Hv'])
 
+        if not np.isfinite(HLx_n):
+            error = f"Stage {stages+1}: HL interpolation failed at x={x_n:.4f}"
+            break
+        if not np.isfinite(HVy_n):
+            error = f"Stage {stages+1}: HV interpolation failed at y={y:.4f}"
+            break
+
+        stage_points.append({'x': float(x_n), 'y': float(HLx_n)})
         tie_lines.append({'x': [float(x_n), float(y)],
                           'y': [float(HLx_n), float(HVy_n)]})
         stage_compositions.append({'x': float(x_n), 'y': float(y)})
         stages += 1
 
+        # ── 3. Switch section at feed stage ──────────────────────────────────
         if in_rectifying and x_n <= zF:
             in_rectifying = False
-            feed_stage = stages
+            feed_stage    = stages
 
         xDelta = xDeltaR if in_rectifying else xDeltaS
         HDelta = HDeltaR if in_rectifying else HDeltaS
 
-        if abs(x_n - xDelta) < 1e-8: break
-
-        slope = (HDelta - HLx_n) / (xDelta - x_n)
-
-        # Next y: solve HV(y) = HDelta + slope*(y - xDelta)
-        # => HV(y) - slope*y = const  (rearranged)
-        try:
-            yArr  = data['yData']
-            hvArr = data['Hv']
-            adj   = [hvArr[k] - slope * yArr[k] for k in range(len(yArr))]
-            rhs   = HDelta - slope * xDelta
-            # adj may increase or decrease — sort for interp
-            pairs_adj = sorted(zip(adj, yArr), key=lambda p: p[0])
-            adj_s = [p[0] for p in pairs_adj]
-            y_s   = [p[1] for p in pairs_adj]
-            # deduplicate adj
-            adj_u, y_u = [adj_s[0]], [y_s[0]]
-            for a, yv in zip(adj_s[1:], y_s[1:]):
-                if a > adj_u[-1]:
-                    adj_u.append(a); y_u.append(yv)
-            if len(adj_u) >= 2:
-                f_adj = interp1d(adj_u, y_u, kind='linear',
-                                 bounds_error=False, fill_value=(y_u[0], y_u[-1]))
-                y_new = float(f_adj(rhs))
-            else:
-                raise ValueError('adj degenerate')
-            if not np.isfinite(y_new) or y_new <= xB or y_new > xD:
-                raise ValueError('out of range')
-            y = y_new
-        except Exception:
+        if abs(x_n - xDelta) < 1e-6:
+            error = f"Stage {stages+1}: x_n too close to difference point."
             break
 
-        # Construction line (rectifying section only)
+        slope = (HDelta - HLx_n) / (xDelta - x_n)
+        if not np.isfinite(slope):
+            error = f"Stage {stages+1}: slope calculation failed."
+            break
+
+        # ── 4. Find y_next: HV(y) = HDelta + slope*(y - xDelta) ─────────────
+        def find_y(yi):
+            return cubic_interpolate(yi, data['yData'], data['Hv']) \
+                   - (HDelta + slope * (yi - xDelta))
+        try:
+            sol = root_scalar(find_y, bracket=[xB + 1e-9, xD - 1e-9], method='bisect')
+            if not sol.converged:
+                # Try narrower bracket around current y
+                yLo = max(xB + 1e-9, y - 0.25)
+                yHi = min(xD - 1e-9, y + 0.25)
+                sol = root_scalar(find_y, bracket=[yLo, yHi], method='bisect')
+            if not sol.converged:
+                error = f"Stage {stages+1}: failed to find y_next."
+                break
+            yNext = float(sol.root)
+        except Exception as e:
+            error = f"Stage {stages+1}: exception finding y_next: {e}"
+            break
+
+        HVyNext = cubic_interpolate(yNext, data['yData'], data['Hv'])
+        if not np.isfinite(HVyNext):
+            error = f"Stage {stages+1}: HV(yNext) not finite."
+            break
+
+        stage_points.append({'x': float(yNext), 'y': float(HVyNext)})
+
+        # ── 5. Construction line endpoint ────────────────────────────────────
         if in_rectifying:
+            def find_x_end(xi):
+                return linear_interpolate(xi, data['xData'], data['Hl']) \
+                       - (HDelta + slope * (xi - xDelta))
             try:
-                def _fx(x, _slope=slope, _HDelta=HDelta, _xDelta=xDelta):
-                    return linear_interpolate(x, data['xData'], data['Hl']) \
-                           - (_HDelta + _slope * (x - _xDelta))
-                sol = root_scalar(_fx, bracket=[0.0, 1.0], method='bisect')
-                xEnd = sol.root
-                HEnd = linear_interpolate(xEnd, data['xData'], data['Hl'])
-                construction_lines.append({'x': [float(xDelta), float(xEnd)],
-                                           'y': [float(HDelta),  float(HEnd)]})
+                sol = root_scalar(find_x_end, bracket=[0.0, 1.0], method='bisect')
+                if sol.converged:
+                    xEnd = float(sol.root)
+                    HEnd = linear_interpolate(xEnd, data['xData'], data['Hl'])
+                    if np.isfinite(HEnd):
+                        construction_lines.append({
+                            'x': [float(xDelta), float(xEnd)],
+                            'y': [float(HDelta),  float(HEnd)]
+                        })
             except Exception:
                 pass
+        else:
+            HEnd = HVyNext
+            if np.isfinite(HEnd):
+                construction_lines.append({
+                    'x': [float(xDelta), float(yNext)],
+                    'y': [float(HDelta),  float(HEnd)]
+                })
+
+        y = yNext
+
+    if stages == 0 or len(stage_points) < 2:
+        error = error or "Failed to calculate stages. Check input data."
 
     return {
         'stages': stages, 'feed_stage': feed_stage,
-        'tie_lines': tie_lines, 'construction_lines': construction_lines,
-        'stage_compositions': stage_compositions, 'error': ''
+        'stage_points': stage_points, 'tie_lines': tie_lines,
+        'construction_lines': construction_lines,
+        'stage_compositions': stage_compositions,
+        'error': error
     }
 
-# ── main calculate ──────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════
+#  Main Calculate  (persis dari Ponchon-Savarit-Generator.py)
+# ══════════════════════════════════════════════════════════
 
 def calculate(data, params):
     zF = float(params['zF']); F  = float(params['F'])
     xD = float(params['xD']); xB = float(params['xB'])
     q  = float(params['q']);  R  = float(params['R'])
 
-    xData = data['xData']
-    yData = data['yData']
+    xData = list(data['xData'])
+    yData = list(data['yData'])
 
-    # Clamp compositions to data range
-    zF = max(xData[0], min(xData[-1], zF))
-    xD = max(xData[0], min(xData[-1], xD))
-    xB = max(xData[0], min(xData[-1], xB))
-
-    yF   = safe_equil_y(zF, xData, yData)
-    HLzF = linear_interpolate(zF, xData, data['Hl'])
-    HVzF = safe_hv_at_y(yF, yData, data['Hv'])
-    HF   = q * HLzF + (1.0 - q) * HVzF
-    HD   = linear_interpolate(xD, xData, data['Hl'])
-    HW   = linear_interpolate(xB, xData, data['Hl'])
+    # ── 1. Basic enthalpies ───────────────────────────────
+    yF    = cubic_interpolate(zF, xData, yData)          # equilibrium y at feed
+    HLzF  = linear_interpolate(zF, xData, data['Hl'])
+    HVzF  = cubic_interpolate(yF, yData, data['Hv'])     # same as .py: cubic(yF, yData, Hv)
+    HF    = q * HLzF + (1.0 - q) * HVzF
+    HD    = linear_interpolate(xD, xData, data['Hl'])
+    HW    = linear_interpolate(xB, xData, data['Hl'])
 
     bad = {k: v for k, v in
            [('yF',yF),('HLzF',HLzF),('HVzF',HVzF),('HF',HF),('HD',HD),('HW',HW)]
            if not np.isfinite(v)}
     if bad:
-        return {'error': f'Interpolation failed: {bad}  |  '
-                         f'zF={zF}, xD={xD}, xB={xB}, yF={yF}  |  '
-                         f'xData=[{xData[0]},{xData[-1]}], '
-                         f'yData=[{yData[0]},{yData[-1]}]'}
+        return {'error': f'Interpolation failed: {bad}. '
+                         f'zF={zF}, xD={xD}, xB={xB}, '
+                         f'xData=[{xData[0]},{xData[-1]}]'}
 
+    # ── 2. Material balance ───────────────────────────────
     D = F * (zF - xB) / (xD - xB)
     W = F - D
+    if not (np.isfinite(D) and np.isfinite(W) and D > 0 and W > 0):
+        return {'error': f'Material balance failed: D={D:.3f}, W={W:.3f}'}
 
-    # HVxD: HV at the distillate vapor composition
-    # For near-pure distillate xD ≈ 1, yData[-1] = 1, so linear_interp is fine
-    HVxD = safe_hv_at_y(xD, yData, data['Hv'])
+    # ── 3. Condenser duty & rectifying difference point ──
+    # HVxD: cubic(xD, yData, Hv) — PERSIS seperti .py asli
+    HVxD = cubic_interpolate(xD, yData, data['Hv'])
     if not np.isfinite(HVxD):
-        HVxD = float(data['Hv'][-1])   # fallback: pure-component value
+        HVxD = float(data['Hv'][-1])   # fallback pure-component
 
     Qc      = D * (HVxD - HD) * (R + 1.0)
-    xDeltaR = xD
-    HDeltaR = HD + Qc / D
+    xDeltaR = float(xD)
+    HDeltaR = float(HD + Qc / D)
+    if not (np.isfinite(Qc) and np.isfinite(HDeltaR)):
+        return {'error': 'Condenser duty / Δ_R calculation failed.'}
 
-    xDeltaS = xB
+    # ── 4. Stripping difference point & reboiler duty ────
+    xDeltaS  = float(xB)
     slope_op = (HDeltaR - HF) / (xDeltaR - zF)
-    HDeltaS  = HF + slope_op * (xDeltaS - zF)
-    Qr       = W * (HW - HDeltaS)
+    HDeltaS  = float(HF + slope_op * (xDeltaS - zF))
+    if not np.isfinite(HDeltaS):
+        return {'error': 'Δ_S calculation failed.'}
+    Qr = W * (HW - HDeltaS)
+    if not np.isfinite(Qr):
+        return {'error': 'Reboiler duty calculation failed.'}
 
-    yFMin    = yF   # same as equilibrium y at feed
-    HVyF     = safe_hv_at_y(yFMin, yData, data['Hv'])
+    # ── 5. Minimum reflux (PERSIS dari .py: Underwood pinch) ─────────────────
+    # yFMin = cubic_interpolate(zF, xData, yData) — sama dengan yF
+    yFMin = yF
+    HVyF  = cubic_interpolate(yFMin, yData, data['Hv'])
     if not np.isfinite(HVyF):
-        HVyF = float(data['Hv'][-1])
+        return {'error': f'H_V(y_F) interpolation failed at yFMin={yFMin:.4f}'}
 
-    denom_min = yFMin - zF
-    slopeMin  = (HVyF - HF) / denom_min if abs(denom_min) > 1e-8 else 0.0
-    QPrimeMin       = HF + slopeMin * (xD - zF)
-    QDoublePrimeMin = HF + slopeMin * (xB - zF)
-    RMin = (QPrimeMin - HVxD) / (HVxD - HD) if abs(HVxD - HD) > 1e-8 else 0.0
+    denom_slopeMin = yFMin - zF
+    if abs(denom_slopeMin) < 1e-8:
+        return {'error': f'Feed is at equilibrium (yFMin ≈ zF = {zF:.4f}), cannot compute RMin.'}
 
+    slopeMin        = (HVyF - HF) / denom_slopeMin
+    if not np.isfinite(slopeMin):
+        return {'error': 'Minimum reflux slope calculation failed.'}
+
+    QPrimeMin       = float(HF + slopeMin * (xD - zF))
+    QDoublePrimeMin = float(HF + slopeMin * (xB - zF))
+    if not (np.isfinite(QPrimeMin) and np.isfinite(QDoublePrimeMin)):
+        return {'error': 'Minimum reflux intersection points calculation failed.'}
+
+    denom_RMin = HVxD - HD
+    if abs(denom_RMin) < 1e-8:
+        return {'error': 'HVxD ≈ HD, cannot compute RMin.'}
+
+    RMin = (QPrimeMin - HVxD) / denom_RMin
+    if not np.isfinite(RMin) or RMin < 0:
+        return {'error': f'Invalid minimum reflux ratio: RMin={RMin:.4f}. '
+                         f'QPrimeMin={QPrimeMin:.2f}, HVxD={HVxD:.2f}, HD={HD:.2f}'}
+
+    # Check R > RMin
+    if R < RMin:
+        return {'error': f'R={R:.3f} < RMin={RMin:.3f}. Increase reflux ratio.'}
+
+    # ── 6. Stage stepping ─────────────────────────────────
     sr = calculate_stages(xD, xB, zF, HF, q, R, D, W,
                           xDeltaR, HDeltaR, xDeltaS, HDeltaS, data)
     if sr['error']:
         return {'error': sr['error']}
 
+    # ── 7. Curves for plot (500 points, cubic spline VLE) ─
     x_range  = np.linspace(0, 1, 500).tolist()
     HL_curve = [linear_interpolate(xi, xData, data['Hl']) for xi in x_range]
-    HV_curve = [safe_hv_at_y(xi, yData, data['Hv'])      for xi in x_range]
-    # Use cubic spline for VLE curve rendering — much smoother visual
+    HV_curve = [cubic_interpolate(xi, yData, data['Hv'])  for xi in x_range]
+
     try:
         cs_equil = CubicSpline(xData, yData, extrapolate=False)
-        y_equil  = [float(np.clip(cs_equil(xi), 0, 1)) if np.isfinite(cs_equil(xi)) else safe_equil_y(xi, xData, yData) for xi in x_range]
+        y_equil  = [float(np.clip(float(cs_equil(xi)), 0, 1))
+                    if np.isfinite(float(cs_equil(xi)))
+                    else float(cubic_interpolate(xi, xData, yData))
+                    for xi in x_range]
     except Exception:
-        y_equil  = [safe_equil_y(xi, xData, yData) for xi in x_range]
+        y_equil  = [float(cubic_interpolate(xi, xData, yData)) for xi in x_range]
 
-    all_H = (data['Hl'] + data['Hv'] +
-             [HF, HD, HW, HDeltaR, HDeltaS, QPrimeMin, QDoublePrimeMin, HVyF])
+    # ── 8. Axis limits ────────────────────────────────────
+    all_H = (list(data['Hl']) + list(data['Hv']) +
+             [HF, HD, HW, HDeltaR, HDeltaS,
+              QPrimeMin, QDoublePrimeMin, HVyF])
     all_H = [v for v in all_H if np.isfinite(v)]
-    pad   = (max(all_H) - min(all_H)) * 0.08 + 50
+    span  = max(all_H) - min(all_H)
+    pad   = span * 0.10 + 1.0
     yMin  = min(all_H) - pad
     yMax  = max(all_H) + pad
 
     return {
-        'D': round(D, 2), 'W': round(W, 2),
-        'xDeltaR': round(xDeltaR, 4), 'HDeltaR': round(HDeltaR, 2),
-        'xDeltaS': round(xDeltaS, 4), 'HDeltaS': round(HDeltaS, 2),
-        'QcDuty': round(Qc, 2), 'QrDuty': round(Qr, 2),
-        'QPrimeMin': round(QPrimeMin, 2), 'QDoublePrimeMin': round(QDoublePrimeMin, 2),
-        'RMin': round(RMin, 3),
-        'stages': sr['stages'], 'feed_stage': sr['feed_stage'],
+        'D': round(D, 4), 'W': round(W, 4),
+        'xDeltaR': round(xDeltaR, 4), 'HDeltaR': round(HDeltaR, 4),
+        'xDeltaS': round(xDeltaS, 4), 'HDeltaS': round(HDeltaS, 4),
+        'QcDuty':  round(Qc, 4),      'QrDuty':  round(Qr, 4),
+        'QPrimeMin':       round(QPrimeMin, 4),
+        'QDoublePrimeMin': round(QDoublePrimeMin, 4),
+        'RMin':            round(RMin, 4),
+        'stages':          sr['stages'],
+        'feed_stage':      sr['feed_stage'],
         'stage_compositions': sr['stage_compositions'],
-        'tie_lines': sr['tie_lines'],
+        'tie_lines':          sr['tie_lines'],
         'construction_lines': sr['construction_lines'],
-        'x_range': x_range, 'HL_curve': HL_curve,
-        'HV_curve': HV_curve, 'y_equilibrium': y_equil,
-        'yMin': yMin, 'yMax': yMax,
-        'HF': HF, 'zF': zF, 'xD': xD, 'xB': xB,
-        'yFMin': yFMin, 'HVyF': HVyF
+        'x_range':     x_range,
+        'HL_curve':    HL_curve,
+        'HV_curve':    HV_curve,
+        'y_equilibrium': y_equil,
+        'yMin': round(yMin, 4), 'yMax': round(yMax, 4),
+        'HF': round(HF, 4), 'zF': zF, 'xD': xD, 'xB': xB,
+        'yFMin': round(yFMin, 4), 'HVyF': round(HVyF, 4)
     }
 
 def calculate_from_js(xData, yData, Hl, Hv, zF, F, xD, xB, q, R):
@@ -519,8 +606,9 @@ def calculate_from_js(xData, yData, Hl, Hv, zF, F, xD, xB, q, R):
         return json.dumps({'error': str(e) + ' | ' + traceback.format_exc()})
 `;
     pyodide.runPython(pythonCode);
-    console.log('✅ Calculator code loaded!');
+    console.log('✅ Calculator code loaded (Ponchon-Savarit, algorithm from .py)!');
 }
+
 
 // ==========================================
 // RUN CALCULATION
