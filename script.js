@@ -32,11 +32,13 @@ const DATASETS = {
     },
     'ammonia-1atm': {
         name: 'Ammonia-Water at 1 atm',
-        x:  [0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.0],
-        y:  [0, 0.750, 0.860, 0.910, 0.940, 0.958, 0.970, 0.978, 0.984, 0.988, 0.991, 0.993, 0.995, 0.996, 0.997, 0.998, 0.998, 0.999, 0.999, 1.000, 1.0],
-        Hl: [1800, 1650, 1520, 1400, 1300, 1210, 1130, 1060, 1000, 950, 910, 880, 860, 850, 850, 860, 880, 910, 950, 1000, 1050],
-        Hv: [23500, 21000, 19500, 18200, 17100, 16200, 15400, 14700, 14100, 13500, 13000, 12500, 12100, 11700, 11300, 10900, 10600, 10300, 10000, 9700, 9500],
-        T:  [212.0, 190.5, 175.0, 162.5, 152.0, 143.5, 136.0, 129.5, 123.5, 118.0, 113.0, 108.5, 104.5, 101.0, 98.0, 95.5, 93.5, 92.0, 91.0, 90.5, 90.0],
+        // y must be strictly increasing — removed duplicate 0.998 and 0.999 entries
+        // kept 17 points (dropped x=0.80 and x=0.95 which caused y duplicates)
+        x:  [0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.85, 0.90, 1.0],
+        y:  [0, 0.750, 0.860, 0.910, 0.940, 0.958, 0.970, 0.978, 0.984, 0.988, 0.991, 0.993, 0.995, 0.996, 0.997, 0.998, 0.999, 0.9995, 1.0],
+        Hl: [1800, 1650, 1520, 1400, 1300, 1210, 1130, 1060, 1000, 950, 910, 880, 860, 850, 850, 860, 910, 950, 1050],
+        Hv: [23500, 21000, 19500, 18200, 17100, 16200, 15400, 14700, 14100, 13500, 13000, 12500, 12100, 11700, 11300, 10900, 10300, 10000, 9500],
+        T:  [212.0, 190.5, 175.0, 162.5, 152.0, 143.5, 136.0, 129.5, 123.5, 118.0, 113.0, 108.5, 104.5, 101.0, 98.0, 95.5, 92.0, 91.0, 90.0],
         units: { enthalpy: 'BTU/lbmole', temperature: '°F', duty: 'BTU/hr' },
         azeotrope: null
     }
@@ -264,6 +266,21 @@ from scipy.interpolate import interp1d, CubicSpline
 from scipy.optimize import root_scalar
 import json
 
+def deduplicate_xy(x_val, y_val):
+    """Remove duplicate x entries and ensure both x and y are strictly increasing."""
+    pairs = list(zip(x_val, y_val))
+    # Remove duplicate x
+    seen_x = set()
+    pairs = [p for p in pairs if not (p[0] in seen_x or seen_x.add(p[0]))]
+    # Remove non-strictly-increasing y (keep first occurrence of each y group)
+    result = [pairs[0]]
+    for p in pairs[1:]:
+        if p[1] > result[-1][1] and p[0] > result[-1][0]:
+            result.append(p)
+    xs = [p[0] for p in result]
+    ys = [p[1] for p in result]
+    return xs, ys
+
 def linear_interpolate(x, x_val, y_val):
     if not x_val or not y_val or len(x_val) != len(y_val):
         return float('nan')
@@ -276,8 +293,22 @@ def cubic_interpolate(x, x_val, y_val):
     if not x_val or not y_val or len(x_val) != len(y_val):
         return float('nan')
     if x < x_val[0] or x > x_val[-1]: return float('nan')
-    cs = CubicSpline(x_val, y_val, extrapolate=False)
+    # Deduplicate to ensure strictly increasing before CubicSpline
+    x_clean, y_clean = deduplicate_xy(x_val, y_val)
+    if len(x_clean) < 2:
+        return float('nan')
+    cs = CubicSpline(x_clean, y_clean, extrapolate=False)
     return float(cs(x))
+
+def inverse_interpolate_y_to_x(y_target, x_val, y_val):
+    """Given y_target, find x such that equil_y(x) = y_target.
+    Uses linear interpolation on (y->x) mapping, safe for near-flat curves."""
+    x_clean, y_clean = deduplicate_xy(x_val, y_val)
+    # Build inverse: y -> x (linear, safe for ammonia-like flat curves)
+    if y_target <= y_clean[0]: return x_clean[0]
+    if y_target >= y_clean[-1]: return x_clean[-1]
+    f_inv = interp1d(y_clean, x_clean, kind='linear', fill_value='extrapolate')
+    return float(f_inv(y_target))
 
 def calculate_stages(xD, xB, zF, HF, q, R, D, W, xDeltaR, HDeltaR, xDeltaS, HDeltaS, data):
     y = xD
@@ -291,13 +322,13 @@ def calculate_stages(xD, xB, zF, HF, q, R, D, W, xDeltaR, HDeltaR, xDeltaS, HDel
     stage_compositions.append({'x': xD, 'y': xD})
 
     while stages < 20:
-        def find_x(x):
-            return cubic_interpolate(x, data['xData'], data['yData']) - y
+        # Use inverse interpolation (y->x) instead of root_scalar on cubic
+        # This is numerically safer for near-flat equilibrium curves (e.g. ammonia)
         try:
-            sol = root_scalar(find_x, bracket=[0, 1], method='bisect')
-            if not sol.converged: break
-            x_n = sol.root
-        except: break
+            x_n = inverse_interpolate_y_to_x(y, data['xData'], data['yData'])
+        except:
+            break
+        if not np.isfinite(x_n): break
 
         if x_n <= xB:
             stage_compositions.append({'x': xB, 'y': y})
@@ -322,17 +353,33 @@ def calculate_stages(xD, xB, zF, HF, q, R, D, W, xDeltaR, HDeltaR, xDeltaS, HDel
 
         slope = (HDelta - HLx_n) / (xDelta - x_n)
 
-        def find_y(y_val):
-            return cubic_interpolate(y_val, data['yData'], data['Hv']) - (HDelta + slope * (y_val - xDelta))
+        # Find next y: solve HV(y) = HDelta + slope*(y - xDelta)
+        # Rearranged: HV(y) - slope*y = HDelta - slope*xDelta = const
+        # Use linear interp on modified HV curve for numerical stability
         try:
-            sol = root_scalar(find_y, bracket=[xB, xD], method='bisect')
-            y = sol.root
-        except: break
+            hv_arr  = data['Hv']
+            y_arr   = data['yData']
+            # Build adjusted curve: HV(y) - slope*y
+            adjusted = [hv_arr[k] - slope * y_arr[k] for k in range(len(y_arr))]
+            rhs = HDelta - slope * xDelta
+            # Linear inverse on adjusted curve
+            f_adj = interp1d(adjusted[::-1], y_arr[::-1], kind='linear', bounds_error=False, fill_value='extrapolate') \
+                    if adjusted[0] > adjusted[-1] else \
+                    interp1d(adjusted, y_arr, kind='linear', bounds_error=False, fill_value='extrapolate')
+            y = float(f_adj(rhs))
+            if not np.isfinite(y) or y < xB or y > xD:
+                # Fallback: bisect on cubic
+                def find_y(y_val):
+                    return cubic_interpolate(y_val, data['yData'], data['Hv']) - (HDelta + slope * (y_val - xDelta))
+                sol = root_scalar(find_y, bracket=[xB, xD], method='bisect')
+                y = sol.root
+        except:
+            break
 
         if in_rectifying:
-            def find_x_end(x):
-                return linear_interpolate(x, data['xData'], data['Hl']) - (HDelta + slope * (x - xDelta))
             try:
+                def find_x_end(x):
+                    return linear_interpolate(x, data['xData'], data['Hl']) - (HDelta + slope * (x - xDelta))
                 sol = root_scalar(find_x_end, bracket=[0, 1], method='bisect')
                 xEnd = sol.root
                 HEnd = linear_interpolate(xEnd, data['xData'], data['Hl'])
