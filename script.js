@@ -310,6 +310,95 @@ def cubic_interpolate(x, x_val, y_val):
     cs = CubicSpline(x_val, y_val, extrapolate=False)
     return float(cs(x))
 
+def calculate_stages(xD, xB, zF, HF, q, R, D, W, xDeltaR, HDeltaR, xDeltaS, HDeltaS, data):
+    y = xD
+    stages = 0
+    tie_lines = []
+    construction_lines = []
+    stage_compositions = []
+    in_rectifying = True
+    feed_stage = 0
+    error = ""
+
+    while stages < 100:
+        def find_x(x):
+            return cubic_interpolate(x, data['xData'], data['yData']) - y
+        sol = root_scalar(find_x, bracket=[0, 1], method='bisect')
+        if not sol.converged:
+            error = f"Stage {stages + 1}: Invalid liquid composition."
+            break
+        x_n = sol.root
+
+        if x_n <= xB:
+            HLxB = linear_interpolate(xB, data['xData'], data['Hl'])
+            if np.isfinite(HLxB):
+                tie_lines.append({'x': [xB, y], 'y': [HLxB, cubic_interpolate(y, data['yData'], data['Hv'])]})
+                stage_compositions.append({'x': xB, 'y': y})
+                stages += 1
+            break
+
+        HLx_n = linear_interpolate(x_n, data['xData'], data['Hl'])
+        HVy_n = cubic_interpolate(y, data['yData'], data['Hv'])
+        
+        tie_lines.append({'x': [x_n, y], 'y': [HLx_n, HVy_n]})
+        stage_compositions.append({'x': x_n, 'y': y})
+        stages += 1
+
+        if in_rectifying and x_n <= zF:
+            in_rectifying = False
+            feed_stage = stages
+
+        xDelta = xDeltaR if in_rectifying else xDeltaS
+        HDelta = HDeltaR if in_rectifying else HDeltaS
+
+        if abs(x_n - xDelta) < 1e-6:
+            error = f"Stage {stages + 1}: Composition too close to difference point."
+            break
+        slope = (HDelta - HLx_n) / (xDelta - x_n)
+        if not np.isfinite(slope):
+            error = f"Stage {stages + 1}: Invalid slope calculation."
+            break
+
+        def find_y(y):
+            return cubic_interpolate(y, data['yData'], data['Hv']) - (HDelta + slope * (y - xDelta))
+        sol = root_scalar(find_y, bracket=[xB, xD], method='bisect')
+        if not sol.converged:
+            yMin = max(0, y - 0.2)
+            yMax = min(1, y + 0.2)
+            sol = root_scalar(find_y, bracket=[yMin, yMax], method='bisect')
+            if not sol.converged:
+                error = f"Stage {stages + 1}: Failed to find valid y_{stages + 2}."
+                break
+        yNext = sol.root
+        
+        if in_rectifying:
+            def find_x_end(x):
+                return linear_interpolate(x, data['xData'], data['Hl']) - (HDelta + slope * (x - xDelta))
+            sol = root_scalar(find_x_end, bracket=[0, 1], method='bisect')
+            if not sol.converged:
+                error = f"Stage {stages + 1}: Failed to find liquid line intersection."
+                break
+            xEnd = sol.root
+            HEnd = linear_interpolate(xEnd, data['xData'], data['Hl'])
+        else:
+            xEnd = yNext
+            HEnd = cubic_interpolate(yNext, data['yData'], data['Hv'])
+        
+        construction_lines.append({'x': [xDelta, xEnd], 'y': [HDelta, HEnd]})
+        y = yNext
+
+    if stages == 0:
+        error = "Failed to calculate stages. Check input data."
+    
+    return {
+        'stages': stages,
+        'feed_stage': feed_stage,
+        'tie_lines': tie_lines,
+        'construction_lines': construction_lines,
+        'stage_compositions': stage_compositions,
+        'error': error
+    }
+
 def calculate(data, params):
     zF = params['zF']
     F = params['F']
@@ -326,7 +415,7 @@ def calculate(data, params):
     HW = linear_interpolate(xB, data['xData'], data['Hl'])
     
     if not all(np.isfinite([yF, HLzF, HVzF, HF, HD, HW])):
-        return {'error': "Interpolation failed."}
+        return {'error': "Interpolation failed. Check if compositions are within data range."}
     
     D = F * (zF - xB) / (xD - xB)
     W = F - D
@@ -344,29 +433,53 @@ def calculate(data, params):
     Qr = W * (HW - HDeltaS)
     QrKW = Qr * 0.27778
     
+    yFMin = cubic_interpolate(zF, data['xData'], data['yData'])
+    HVyF = cubic_interpolate(yFMin, data['yData'], data['Hv'])
+    slopeMin = (HVyF - HF) / (yFMin - zF)
+    QPrimeMin = HF + slopeMin * (xD - zF)
+    QDoublePrimeMin = HF + slopeMin * (xB - zF)
+    RMin = (QPrimeMin - HVxD) / (HVxD - HD)
+    
+    stage_results = calculate_stages(
+        xD, xB, zF, HF, q, R, D, W, xDeltaR, HDeltaR, xDeltaS, HDeltaS, data
+    )
+    
+    if stage_results['error']:
+        return {'error': stage_results['error']}
+    
+    x_range = np.linspace(0, 1, 200).tolist()
+    HL_curve = [linear_interpolate(xi, data['xData'], data['Hl']) for xi in x_range]
+    HV_curve = [cubic_interpolate(xi, data['yData'], data['Hv']) for xi in x_range]
+    y_equilibrium = [cubic_interpolate(xi, data['xData'], data['yData']) for xi in x_range]
+    
+    y_values = data['Hl'] + data['Hv'] + [HF, HD, HW, HDeltaR, HDeltaS, QPrimeMin, QDoublePrimeMin, HVyF]
+    y_values = [y for y in y_values if np.isfinite(y)]
+    yMin, yMax = min(y_values) - 10, max(y_values) + 10
+    
     return {
         'D': round(D, 2), 'W': round(W, 2),
         'xDeltaR': round(xDeltaR, 3), 'HDeltaR': round(HDeltaR, 2),
         'xDeltaS': round(xDeltaS, 3), 'HDeltaS': round(HDeltaS, 2),
         'QcKW': round(QcKW, 2), 'QrKW': round(QrKW, 2),
-        'stages': 6, 'feed_stage': 3,
-        'stage_compositions': [
-            {'x': 0.97, 'y': 0.97},
-            {'x': 0.85, 'y': 0.92},
-            {'x': 0.70, 'y': 0.85},
-            {'x': 0.50, 'y': 0.75},
-            {'x': 0.30, 'y': 0.60},
-            {'x': 0.10, 'y': 0.30},
-            {'x': 0.01, 'y': 0.05}
-        ],
-        'x_range': list(np.linspace(0, 1, 200)),
-        'HL_curve': [linear_interpolate(xi, data['xData'], data['Hl']) for xi in np.linspace(0, 1, 200)],
-        'HV_curve': [cubic_interpolate(xi, data['yData'], data['Hv']) for xi in np.linspace(0, 1, 200)],
-        'y_equilibrium': [cubic_interpolate(xi, data['xData'], data['yData']) for xi in np.linspace(0, 1, 200)],
-        'yMin': 0, 'yMax': 4000,
-        'HF': HF, 'zF': zF, 'xD': xD, 'xB': xB,
-        'yFMin': yF, 'HVyF': HVyF,
-        'QPrimeMin': 3000, 'QDoublePrimeMin': 500, 'RMin': 1.5
+        'QPrimeMin': round(QPrimeMin, 2), 'QDoublePrimeMin': round(QDoublePrimeMin, 2),
+        'RMin': round(RMin, 2), 
+        'stages': stage_results['stages'],
+        'feed_stage': stage_results['feed_stage'],
+        'stage_compositions': stage_results['stage_compositions'],
+        'x_range': x_range, 
+        'HL_curve': HL_curve, 
+        'HV_curve': HV_curve,
+        'y_equilibrium': y_equilibrium, 
+        'yMin': yMin, 
+        'yMax': yMax,
+        'tie_lines': stage_results['tie_lines'],
+        'construction_lines': stage_results['construction_lines'],
+        'HF': HF, 
+        'zF': zF, 
+        'xD': xD, 
+        'xB': xB,
+        'yFMin': yFMin, 
+        'HVyF': HVyF
     }
 
 def calculate_from_js(xData, yData, Hl, Hv, zF, F, xD, xB, q, R):
@@ -379,7 +492,8 @@ def calculate_from_js(xData, yData, Hl, Hv, zF, F, xD, xB, q, R):
         }
         params = {'zF': float(zF), 'F': float(F), 'xD': float(xD), 
                   'xB': float(xB), 'q': float(q), 'R': float(R)}
-        return json.dumps(calculate(data, params))
+        result = calculate(data, params)
+        return json.dumps(result)
     except Exception as e:
         return json.dumps({'error': str(e)})
 `;
@@ -821,3 +935,4 @@ document.addEventListener('DOMContentLoaded', function() {
     updatePreview();
     initPyodide();
 });
+
