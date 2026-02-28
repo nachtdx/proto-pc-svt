@@ -643,40 +643,124 @@ function createPlot(results) {
         });
     }
     
-    // ========== STAGE TIE LINES ==========
-    if (results.tie_lines?.length) {
-        results.tie_lines.forEach((tie, i) => {
-            const color = stageColors[i % stageColors.length];
+// ========== STAGE TIE LINES (DIAGRAM ATAS) ==========
+if (results.tie_lines?.length) {
+    results.tie_lines.forEach((tie, i) => {
+        const color = stageColors[i % stageColors.length];
+        traces.push({
+            x: tie.x,
+            y: tie.y,
+            mode: 'lines',
+            name: `Stage ${i+1}`,
+            line: {color, width: 3},
+            legendgroup: `stage_${i+1}`, // Group untuk legend yang sama
+            xaxis: 'x', yaxis: 'y'
+        });
+        // Add markers at ends of tie lines
+        traces.push({
+            x: [tie.x[0], tie.x[1]],
+            y: [tie.y[0], tie.y[1]],
+            mode: 'markers',
+            marker: {color: [color, color], size: 8, symbol: ['circle', 'diamond']},
+            showlegend: false,
+            legendgroup: `stage_${i+1}`,
+            xaxis: 'x', yaxis: 'y'
+        });
+    });
+}
+
+// ========== STAGE TRACING DI SUBPLOT BAWAH ==========
+if (results.stage_compositions?.length > 1) {
+    for (let i = 0; i < results.stage_compositions.length - 1; i++) {
+        const currentStage = results.stage_compositions[i];
+        const nextStage = results.stage_compositions[i + 1];
+        const color = stageColors[i % stageColors.length];
+        
+        // Garis vertikal: dari (x_n, y_n) ke (x_n, x_n)
+        traces.push({
+            x: [currentStage.x, currentStage.x],
+            y: [currentStage.y, currentStage.x],
+            mode: 'lines',
+            line: {color: color, width: 2.5},
+            showlegend: false,
+            legendgroup: `stage_${i+1}`,
+            xaxis: 'x2', yaxis: 'y2'
+        });
+        
+        // Garis horizontal: dari (x_n, x_n) ke (x_{n+1}, x_{n+1})
+        traces.push({
+            x: [currentStage.x, nextStage.x],
+            y: [currentStage.x, nextStage.x],
+            mode: 'lines',
+            line: {color: color, width: 2.5},
+            showlegend: false,
+            legendgroup: `stage_${i+1}`,
+            xaxis: 'x2', yaxis: 'y2'
+        });
+        
+        // Titik untuk stage
+        traces.push({
+            x: [currentStage.x],
+            y: [currentStage.y],
+            mode: 'markers',
+            marker: {color: color, size: 10, symbol: 'circle'},
+            showlegend: false,
+            legendgroup: `stage_${i+1}`,
+            xaxis: 'x2', yaxis: 'y2'
+        });
+        
+        // Titik untuk stage terakhir (hanya sekali)
+        if (i === results.stage_compositions.length - 2) {
             traces.push({
-                x: tie.x,
-                y: tie.y,
+                x: [nextStage.x],
+                y: [nextStage.y],
+                mode: 'markers',
+                marker: {color: color, size: 10, symbol: 'circle'},
+                showlegend: false,
+                legendgroup: `stage_${i+2}`,
+                xaxis: 'x2', yaxis: 'y2'
+            });
+        }
+    }
+}
+
+// ========== GARIS PROYEKSI VERTIKAL ==========
+if (results.stage_compositions?.length) {
+    results.stage_compositions.forEach((stage, i) => {
+        const color = stageColors[i % stageColors.length];
+        const x_liq = stage.x;
+        const y_liq = stage.y;
+        
+        const idxLiq = Math.round(x_liq * 199);
+        const idxVap = Math.round(y_liq * 199);
+        const H_liq_stage = results.HL_curve?.[idxLiq];
+        const H_vap_stage = results.HV_curve?.[idxVap];
+        
+        if (H_liq_stage && H_vap_stage) {
+            // Proyeksi liquid dari diagram atas ke bawah
+            traces.push({
+                x: [x_liq, x_liq],
+                y: [H_liq_stage, results.yMin],
                 mode: 'lines',
-                name: `Stage ${i+1}`,
-                line: {color, width: 3},
+                showlegend: false,
+                line: {color: color, width: 1.5, dash: 'dot'},
+                legendgroup: `stage_${i+1}`,
                 xaxis: 'x', yaxis: 'y'
             });
-        });
-    }
-    
-    // ========== VLE CURVE ==========
-    traces.push({
-        x: results.x_range,
-        y: results.y_equilibrium,
-        mode: 'lines',
-        name: 'Equilibrium Curve',
-        line: {color: '#1E1E1E', width: 3.5},
-        xaxis: 'x2', yaxis: 'y2'
+            
+            // Proyeksi vapor dari diagram atas ke bawah
+            traces.push({
+                x: [y_liq, y_liq],
+                y: [H_vap_stage, results.yMin],
+                mode: 'lines',
+                showlegend: false,
+                line: {color: color, width: 1.5, dash: 'dot'},
+                legendgroup: `stage_${i+1}`,
+                xaxis: 'x', yaxis: 'y'
+            });
+        }
     });
-    
-    // ========== y = x LINE ==========
-    traces.push({
-        x: [0, 1],
-        y: [0, 1],
-        mode: 'lines',
-        name: 'y = x',
-        line: {color: '#6C757D', width: 2, dash: 'dash'},
-        xaxis: 'x2', yaxis: 'y2'
-    });
+}
     
     // ========== STAGE TRACING DI SUBPLOT BAWAH ==========
     if (results.stage_compositions?.length > 1) {
@@ -1171,3 +1255,4 @@ document.addEventListener('DOMContentLoaded', function() {
     updatePreview();
     initPyodide();
 });
+
