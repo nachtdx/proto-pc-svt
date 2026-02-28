@@ -282,7 +282,7 @@ function loadEthanolWaterDataset(pressure) {
 }
 
 // ==========================================
-// LOAD CALCULATOR CODE (PYTHON) - FIXED
+// LOAD CALCULATOR CODE (PYTHON) - FIXED STAGE VISUALIZATION
 // ==========================================
 async function loadCalculatorCode() {
     try {
@@ -320,81 +320,59 @@ def calculate_stages(xD, xB, zF, HF, q, R, D, W, xDeltaR, HDeltaR, xDeltaS, HDel
     feed_stage = 0
     error = ""
 
-    while stages < 100:
+    # Tambahkan stage pertama (distillate)
+    stage_compositions.append({'x': xD, 'y': xD})
+    
+    while stages < 20:  # Batasi sampai 20 stage
+        # Cari x dari kurva kesetimbangan
         def find_x(x):
             return cubic_interpolate(x, data['xData'], data['yData']) - y
-        sol = root_scalar(find_x, bracket=[0, 1], method='bisect')
-        if not sol.converged:
-            error = f"Stage {stages + 1}: Invalid liquid composition."
+        try:
+            sol = root_scalar(find_x, bracket=[0, 1], method='bisect')
+            if not sol.converged:
+                break
+            x_n = sol.root
+        except:
             break
-        x_n = sol.root
 
+        # Cek apakah sudah mencapai bottom
         if x_n <= xB:
-            HLxB = linear_interpolate(xB, data['xData'], data['Hl'])
-            if np.isfinite(HLxB):
-                tie_lines.append({'x': [xB, y], 'y': [HLxB, cubic_interpolate(y, data['yData'], data['Hv'])]})
-                stage_compositions.append({'x': xB, 'y': y})
-                stages += 1
+            stage_compositions.append({'x': xB, 'y': y})
+            stages += 1
             break
 
-        HLx_n = linear_interpolate(x_n, data['xData'], data['Hl'])
-        HVy_n = cubic_interpolate(y, data['yData'], data['Hv'])
-        
-        tie_lines.append({'x': [x_n, y], 'y': [HLx_n, HVy_n]})
+        # Simpan stage
         stage_compositions.append({'x': x_n, 'y': y})
         stages += 1
 
+        # Cek feed stage
         if in_rectifying and x_n <= zF:
             in_rectifying = False
             feed_stage = stages
 
+        # Hitung slope untuk stage berikutnya
         xDelta = xDeltaR if in_rectifying else xDeltaS
         HDelta = HDeltaR if in_rectifying else HDeltaS
-
+        HLx_n = linear_interpolate(x_n, data['xData'], data['Hl'])
+        
         if abs(x_n - xDelta) < 1e-6:
-            error = f"Stage {stages + 1}: Composition too close to difference point."
             break
+            
         slope = (HDelta - HLx_n) / (xDelta - x_n)
-        if not np.isfinite(slope):
-            error = f"Stage {stages + 1}: Invalid slope calculation."
+        
+        # Cari y berikutnya
+        def find_y(y_val):
+            return cubic_interpolate(y_val, data['yData'], data['Hv']) - (HDelta + slope * (y_val - xDelta))
+        
+        try:
+            sol = root_scalar(find_y, bracket=[xB, xD], method='bisect')
+            y = sol.root
+        except:
             break
 
-        def find_y(y):
-            return cubic_interpolate(y, data['yData'], data['Hv']) - (HDelta + slope * (y - xDelta))
-        sol = root_scalar(find_y, bracket=[xB, xD], method='bisect')
-        if not sol.converged:
-            yMin = max(0, y - 0.2)
-            yMax = min(1, y + 0.2)
-            sol = root_scalar(find_y, bracket=[yMin, yMax], method='bisect')
-            if not sol.converged:
-                error = f"Stage {stages + 1}: Failed to find valid y_{stages + 2}."
-                break
-        yNext = sol.root
-        
-        if in_rectifying:
-            def find_x_end(x):
-                return linear_interpolate(x, data['xData'], data['Hl']) - (HDelta + slope * (x - xDelta))
-            sol = root_scalar(find_x_end, bracket=[0, 1], method='bisect')
-            if not sol.converged:
-                error = f"Stage {stages + 1}: Failed to find liquid line intersection."
-                break
-            xEnd = sol.root
-            HEnd = linear_interpolate(xEnd, data['xData'], data['Hl'])
-        else:
-            xEnd = yNext
-            HEnd = cubic_interpolate(yNext, data['yData'], data['Hv'])
-        
-        construction_lines.append({'x': [xDelta, xEnd], 'y': [HDelta, HEnd]})
-        y = yNext
-
-    if stages == 0:
-        error = "Failed to calculate stages. Check input data."
-    
     return {
         'stages': stages,
         'feed_stage': feed_stage,
-        'tie_lines': tie_lines,
-        'construction_lines': construction_lines,
         'stage_compositions': stage_compositions,
         'error': error
     }
@@ -407,6 +385,7 @@ def calculate(data, params):
     q = params['q']
     R = params['R']
     
+    # Interpolasi data
     yF = cubic_interpolate(zF, data['xData'], data['yData'])
     HLzF = linear_interpolate(zF, data['xData'], data['Hl'])
     HVzF = cubic_interpolate(yF, data['yData'], data['Hv'])
@@ -417,9 +396,11 @@ def calculate(data, params):
     if not all(np.isfinite([yF, HLzF, HVzF, HF, HD, HW])):
         return {'error': "Interpolation failed. Check if compositions are within data range."}
     
+    # Neraca massa
     D = F * (zF - xB) / (xD - xB)
     W = F - D
     
+    # Beban panas
     HVxD = cubic_interpolate(xD, data['yData'], data['Hv'])
     Qc = D * (HVxD - HD) * (R + 1)
     QcKW = Qc * 0.27778
@@ -433,6 +414,7 @@ def calculate(data, params):
     Qr = W * (HW - HDeltaS)
     QrKW = Qr * 0.27778
     
+    # Minimum reflux
     yFMin = cubic_interpolate(zF, data['xData'], data['yData'])
     HVyF = cubic_interpolate(yFMin, data['yData'], data['Hv'])
     slopeMin = (HVyF - HF) / (yFMin - zF)
@@ -440,6 +422,7 @@ def calculate(data, params):
     QDoublePrimeMin = HF + slopeMin * (xB - zF)
     RMin = (QPrimeMin - HVxD) / (HVxD - HD)
     
+    # Hitung stages
     stage_results = calculate_stages(
         xD, xB, zF, HF, q, R, D, W, xDeltaR, HDeltaR, xDeltaS, HDeltaS, data
     )
@@ -447,21 +430,28 @@ def calculate(data, params):
     if stage_results['error']:
         return {'error': stage_results['error']}
     
+    # Generate curves untuk plotting
     x_range = np.linspace(0, 1, 200).tolist()
     HL_curve = [linear_interpolate(xi, data['xData'], data['Hl']) for xi in x_range]
     HV_curve = [cubic_interpolate(xi, data['yData'], data['Hv']) for xi in x_range]
     y_equilibrium = [cubic_interpolate(xi, data['xData'], data['yData']) for xi in x_range]
     
+    # Tentukan range y-axis
     y_values = data['Hl'] + data['Hv'] + [HF, HD, HW, HDeltaR, HDeltaS, QPrimeMin, QDoublePrimeMin, HVyF]
     y_values = [y for y in y_values if np.isfinite(y)]
-    yMin, yMax = min(y_values) - 10, max(y_values) + 10
+    yMin, yMax = min(y_values) - 50, max(y_values) + 50
     
     return {
-        'D': round(D, 2), 'W': round(W, 2),
-        'xDeltaR': round(xDeltaR, 3), 'HDeltaR': round(HDeltaR, 2),
-        'xDeltaS': round(xDeltaS, 3), 'HDeltaS': round(HDeltaS, 2),
-        'QcKW': round(QcKW, 2), 'QrKW': round(QrKW, 2),
-        'QPrimeMin': round(QPrimeMin, 2), 'QDoublePrimeMin': round(QDoublePrimeMin, 2),
+        'D': round(D, 2), 
+        'W': round(W, 2),
+        'xDeltaR': round(xDeltaR, 3), 
+        'HDeltaR': round(HDeltaR, 2),
+        'xDeltaS': round(xDeltaS, 3), 
+        'HDeltaS': round(HDeltaS, 2),
+        'QcKW': round(QcKW, 2), 
+        'QrKW': round(QrKW, 2),
+        'QPrimeMin': round(QPrimeMin, 2), 
+        'QDoublePrimeMin': round(QDoublePrimeMin, 2),
         'RMin': round(RMin, 2), 
         'stages': stage_results['stages'],
         'feed_stage': stage_results['feed_stage'],
@@ -472,8 +462,6 @@ def calculate(data, params):
         'y_equilibrium': y_equilibrium, 
         'yMin': yMin, 
         'yMax': yMax,
-        'tie_lines': stage_results['tie_lines'],
-        'construction_lines': stage_results['construction_lines'],
         'HF': HF, 
         'zF': zF, 
         'xD': xD, 
@@ -505,7 +493,6 @@ def calculate_from_js(xData, yData, Hl, Hv, zF, F, xD, xB, q, R):
         throw error;
     }
 }
-
 // ==========================================
 // RUN CALCULATION
 // ==========================================
@@ -1013,5 +1000,6 @@ document.addEventListener('DOMContentLoaded', function() {
     updatePreview();
     initPyodide();
 });
+
 
 
