@@ -530,11 +530,13 @@ async function runCalculation(inputData) {
 }
 
 // ==========================================
-// UPDATE QUICK SUMMARY
+// UPDATE QUICK SUMMARY - FIXED
 // ==========================================
 function updateQuickSummary(results) {
     const quickSummary = document.getElementById('quickSummary');
     const quickSummaryContent = document.getElementById('quickSummaryContent');
+    
+    if (!quickSummary || !quickSummaryContent) return;
     
     const systemType = document.getElementById('systemType').value;
     const isBritish = systemType.includes('ethanol');
@@ -580,6 +582,82 @@ function updateQuickSummary(results) {
     `;
     
     quickSummary.style.display = 'block';
+}
+
+// ==========================================
+// UPDATE ENTHALPY TABLE - FIXED
+// ==========================================
+function updateEnthalpyTable(results) {
+    const enthalpyBody = document.getElementById('enthalpyBody');
+    if (!enthalpyBody) return;
+    
+    let html = '';
+    if (results.stage_compositions && results.stage_compositions.length > 0) {
+        results.stage_compositions.forEach((stage, i) => {
+            const idxLiq = Math.round(stage.x * 199);
+            const idxVap = Math.round(stage.y * 199);
+            const HL = results.HL_curve && results.HL_curve[idxLiq] ? 
+                     results.HL_curve[idxLiq].toFixed(0) : 'N/A';
+            const HV = results.HV_curve && results.HV_curve[idxVap] ? 
+                     results.HV_curve[idxVap].toFixed(0) : 'N/A';
+            
+            html += `<tr><td>Stage ${i+1}</td><td>${HL}</td><td>${HV}</td></tr>`;
+        });
+    } else {
+        html = '<tr><td colspan="3" class="text-center text-muted">No enthalpy data available</td></tr>';
+    }
+    enthalpyBody.innerHTML = html;
+}
+
+// ==========================================
+// DISPLAY RESULTS - FIXED
+// ==========================================
+function displayResults(results) {
+    createPlot(results);
+    updateQuickSummary(results);
+    updateEnthalpyTable(results);
+    
+    const systemType = document.getElementById('systemType').value;
+    const isBritish = systemType.includes('ethanol');
+    const enthalpyUnit = isBritish ? 'BTU/lbmole' : 'MJ/kmol';
+    const flowUnit = isBritish ? 'lbmol/hr' : 'kmol/hr';
+    
+    // Summary table
+    const summaryBody = document.getElementById('summaryBody');
+    if (summaryBody) {
+        const summaryHtml = `
+            <tr><td>Distillate Flow (D)</td><td>${results.D} ${flowUnit}</td></tr>
+            <tr><td>Bottoms Flow (W)</td><td>${results.W} ${flowUnit}</td></tr>
+            <tr><td>Δ_R</td><td>(${results.xDeltaR}, ${results.HDeltaR} ${enthalpyUnit})</td></tr>
+            <tr><td>Δ_S</td><td>(${results.xDeltaS}, ${results.HDeltaS} ${enthalpyUnit})</td></tr>
+            <tr><td>Condenser Duty</td><td>${results.QcKW} kW</td></tr>
+            <tr><td>Reboiler Duty</td><td>${results.QrKW} kW</td></tr>
+            <tr><td>Stages</td><td>${results.stages}</td></tr>
+            <tr><td>Feed Stage</td><td>${results.feed_stage}</td></tr>
+            <tr><td>R min</td><td>${results.RMin}</td></tr>
+        `;
+        summaryBody.innerHTML = summaryHtml;
+    }
+    
+    // Stages table
+    const stagesBody = document.getElementById('stagesBody');
+    if (stagesBody) {
+        let stagesRows = '';
+        if (results.stage_compositions) {
+            results.stage_compositions.forEach((stage, i) => {
+                stagesRows += `<tr><td>Stage ${i+1}</td><td>${stage.x.toFixed(4)}</td><td>${stage.y.toFixed(4)}</td></tr>`;
+            });
+        } else {
+            stagesRows = '<tr><td colspan="3" class="text-center text-muted">No stage data available</td></tr>';
+        }
+        stagesBody.innerHTML = stagesRows;
+    }
+    
+    const exportBtn = document.getElementById('exportBtn');
+    if (exportBtn) exportBtn.disabled = false;
+    
+    currentResults = results;
+    showToast('✅ Calculation completed!', 'success');
 }
 
 // ==========================================
@@ -935,4 +1013,5 @@ document.addEventListener('DOMContentLoaded', function() {
     updatePreview();
     initPyodide();
 });
+
 
