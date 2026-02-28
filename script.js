@@ -596,7 +596,7 @@ def calculate(data, params):
     if not np.isfinite(HVxD):
         HVxD = float(data['Hv'][-1])
 
-    Qc      = D * (HVxD - HD) * (R+1.0)
+    Qc      = D * (HVxD - HD) * (R + 1.0)
     xDeltaR = float(xD)
     HDeltaR = float(HD + Qc / D)
     if not (np.isfinite(Qc) and np.isfinite(HDeltaR)):
@@ -1091,5 +1091,3 @@ document.addEventListener('DOMContentLoaded', function () {
     updatePreview();
     initPyodide();
 });
-
-
