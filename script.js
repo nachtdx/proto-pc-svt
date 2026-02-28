@@ -516,12 +516,19 @@ def calculate_from_js(xData, yData, Hl, Hv, zF, F, xD, xB, q, R):
 }
 
 // ==========================================
-// RUN CALCULATION
+// RUN CALCULATION - PAKE runPython (bukan runPythonAsync)
 // ==========================================
 async function runCalculation(inputData) {
     if (!pyodideReady) throw new Error('Pyodide belum siap.');
     try {
-        const result = await pyodide.runPythonAsync(`
+        // Versi 0.23.4 pake runPython biasa
+        const result =         pyodide.runPython(pythonCode);
+        console.log('✅ Calculator code loaded!');
+    } catch (error) {
+        console.error('Error loading calculator code:', error);
+        throw error;
+    }
+}Python(`
             calculate_from_js(
                 ${JSON.stringify(inputData.xData)},
                 ${JSON.stringify(inputData.yData)},
@@ -1050,7 +1057,7 @@ function displayResults(results) {
 }
 
 // ==========================================
-// INITIALIZE PYODIDE
+// INITIALIZE PYODIDE - VERSI FIX
 // ==========================================
 async function initPyodide() {
     const loadingDiv = document.getElementById('pyodide-loading');
@@ -1066,11 +1073,9 @@ async function initPyodide() {
         progressBar.style.width = '20%'; 
         progressBar.innerText = '20%';
         
-        // Load Pyodide
+        // PASTIKAN VERSI SAMA DENGAN YANG DI HTML (0.23.4)
         pyodide = await loadPyodide({
-            indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/",
-            stdout: (text) => console.log('Pyodide stdout:', text),
-            stderr: (text) => console.error('Pyodide stderr:', text)
+            indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/",
         });
         
         statusText.innerText = 'Loading numpy...';
@@ -1100,7 +1105,6 @@ async function initPyodide() {
         pyodideReady = true;
         calculateBtn.disabled = false;
         
-        // Show success message
         showToast('✅ Pyodide loaded successfully!', 'success');
         
         setTimeout(() => {
@@ -1114,7 +1118,6 @@ async function initPyodide() {
         loadingDiv.style.display = 'none';
     }
 }
-
 // ==========================================
 // EVENT LISTENERS
 // ==========================================
@@ -1278,3 +1281,4 @@ document.addEventListener('DOMContentLoaded', function() {
     updatePreview();
     initPyodide();
 });
+
