@@ -266,80 +266,84 @@ from scipy.interpolate import interp1d, CubicSpline
 from scipy.optimize import root_scalar
 import json
 
-def deduplicate_xy(x_val, y_val):
-    """Remove duplicate x entries and ensure both x and y are strictly increasing."""
-    pairs = list(zip(x_val, y_val))
-    # Remove duplicate x
-    seen_x = set()
-    pairs = [p for p in pairs if not (p[0] in seen_x or seen_x.add(p[0]))]
-    # Remove non-strictly-increasing y (keep first occurrence of each y group)
-    result = [pairs[0]]
-    for p in pairs[1:]:
-        if p[1] > result[-1][1] and p[0] > result[-1][0]:
-            result.append(p)
-    xs = [p[0] for p in result]
-    ys = [p[1] for p in result]
-    return xs, ys
+# ── helpers ────────────────────────────────────────────────────────────────
 
 def linear_interpolate(x, x_val, y_val):
-    if not x_val or not y_val or len(x_val) != len(y_val):
+    x_val = list(x_val); y_val = list(y_val)
+    if len(x_val) != len(y_val) or len(x_val) < 2:
         return float('nan')
-    if x <= x_val[0]: return y_val[0]
-    if x >= x_val[-1]: return y_val[-1]
+    if x <= x_val[0]:  return float(y_val[0])
+    if x >= x_val[-1]: return float(y_val[-1])
     f = interp1d(x_val, y_val, kind='linear', fill_value='extrapolate')
     return float(f(x))
 
 def cubic_interpolate(x, x_val, y_val):
-    if not x_val or not y_val or len(x_val) != len(y_val):
+    x_val = list(x_val); y_val = list(y_val)
+    if len(x_val) != len(y_val) or len(x_val) < 2:
         return float('nan')
-    if x < x_val[0] or x > x_val[-1]: return float('nan')
-    # Deduplicate to ensure strictly increasing before CubicSpline
-    x_clean, y_clean = deduplicate_xy(x_val, y_val)
-    if len(x_clean) < 2:
+    if x < x_val[0] or x > x_val[-1]:
         return float('nan')
-    cs = CubicSpline(x_clean, y_clean, extrapolate=False)
-    return float(cs(x))
+    try:
+        cs = CubicSpline(x_val, y_val, extrapolate=False)
+        return float(cs(x))
+    except Exception:
+        return linear_interpolate(x, x_val, y_val)
 
-def inverse_interpolate_y_to_x(y_target, x_val, y_val):
-    """Given y_target, find x such that equil_y(x) = y_target.
-    Uses linear interpolation on (y->x) mapping, safe for near-flat curves."""
-    x_clean, y_clean = deduplicate_xy(x_val, y_val)
-    # Build inverse: y -> x (linear, safe for ammonia-like flat curves)
-    if y_target <= y_clean[0]: return x_clean[0]
-    if y_target >= y_clean[-1]: return x_clean[-1]
-    f_inv = interp1d(y_clean, x_clean, kind='linear', fill_value='extrapolate')
-    return float(f_inv(y_target))
+def safe_equil_y(x, xData, yData):
+    """Equilibrium y at liquid composition x. Cubic → fallback linear."""
+    v = cubic_interpolate(x, xData, yData)
+    if not np.isfinite(v):
+        v = linear_interpolate(x, xData, yData)
+    return v
 
-def calculate_stages(xD, xB, zF, HF, q, R, D, W, xDeltaR, HDeltaR, xDeltaS, HDeltaS, data):
+def safe_hv_at_y(y, yData, Hv):
+    """HV at vapor composition y. Always linear — yData can be near-flat."""
+    return linear_interpolate(y, yData, Hv)
+
+def equil_x_from_y(y_target, xData, yData):
+    """Inverse lookup: given y_target find x on equilibrium curve (y -> x)."""
+    # Build unique, strictly-increasing (y,x) pairs
+    pairs = sorted(zip(yData, xData), key=lambda p: p[0])
+    ys_u, xs_u = [], []
+    for yv, xv in pairs:
+        if not ys_u or yv > ys_u[-1]:
+            ys_u.append(yv); xs_u.append(xv)
+    if y_target <= ys_u[0]:  return float(xs_u[0])
+    if y_target >= ys_u[-1]: return float(xs_u[-1])
+    f = interp1d(ys_u, xs_u, kind='linear')
+    return float(f(y_target))
+
+# ── stage stepping ──────────────────────────────────────────────────────────
+
+def calculate_stages(xD, xB, zF, HF, q, R, D, W,
+                     xDeltaR, HDeltaR, xDeltaS, HDeltaS, data):
     y = xD
     stages = 0
-    tie_lines = []
-    construction_lines = []
-    stage_compositions = []
+    tie_lines, construction_lines, stage_compositions = [], [], []
     in_rectifying = True
     feed_stage = 0
 
-    stage_compositions.append({'x': xD, 'y': xD})
+    stage_compositions.append({'x': float(xD), 'y': float(xD)})
 
-    while stages < 20:
-        # Use inverse interpolation (y->x) instead of root_scalar on cubic
-        # This is numerically safer for near-flat equilibrium curves (e.g. ammonia)
+    while stages < 25:
+        # Get liquid x from vapor y (inverse equilibrium)
         try:
-            x_n = inverse_interpolate_y_to_x(y, data['xData'], data['yData'])
-        except:
+            x_n = equil_x_from_y(y, data['xData'], data['yData'])
+        except Exception:
             break
         if not np.isfinite(x_n): break
 
         if x_n <= xB:
-            stage_compositions.append({'x': xB, 'y': y})
+            stage_compositions.append({'x': float(xB), 'y': float(y)})
             stages += 1
             break
 
         HLx_n = linear_interpolate(x_n, data['xData'], data['Hl'])
         HVy_n = safe_hv_at_y(y, data['yData'], data['Hv'])
 
-        tie_lines.append({'x': [x_n, y], 'y': [HLx_n, HVy_n]})
-        stage_compositions.append({'x': x_n, 'y': y})
+        tie_lines.append({'x': [float(x_n), float(y)],
+                          'y': [float(HLx_n), float(HVy_n)]})
+        stage_compositions.append({'x': float(x_n), 'y': float(y)})
         stages += 1
 
         if in_rectifying and x_n <= zF:
@@ -349,42 +353,51 @@ def calculate_stages(xD, xB, zF, HF, q, R, D, W, xDeltaR, HDeltaR, xDeltaS, HDel
         xDelta = xDeltaR if in_rectifying else xDeltaS
         HDelta = HDeltaR if in_rectifying else HDeltaS
 
-        if abs(x_n - xDelta) < 1e-6: break
+        if abs(x_n - xDelta) < 1e-8: break
 
         slope = (HDelta - HLx_n) / (xDelta - x_n)
 
-        # Find next y: solve HV(y) = HDelta + slope*(y - xDelta)
-        # Rearranged: HV(y) - slope*y = HDelta - slope*xDelta = const
-        # Use linear interp on modified HV curve for numerical stability
+        # Next y: solve HV(y) = HDelta + slope*(y - xDelta)
+        # => HV(y) - slope*y = const  (rearranged)
         try:
-            hv_arr  = data['Hv']
-            y_arr   = data['yData']
-            # Build adjusted curve: HV(y) - slope*y
-            adjusted = [hv_arr[k] - slope * y_arr[k] for k in range(len(y_arr))]
-            rhs = HDelta - slope * xDelta
-            # Linear inverse on adjusted curve
-            f_adj = interp1d(adjusted[::-1], y_arr[::-1], kind='linear', bounds_error=False, fill_value='extrapolate') \
-                    if adjusted[0] > adjusted[-1] else \
-                    interp1d(adjusted, y_arr, kind='linear', bounds_error=False, fill_value='extrapolate')
-            y = float(f_adj(rhs))
-            if not np.isfinite(y) or y < xB or y > xD:
-                # Fallback: bisect on cubic
-                def find_y(y_val):
-                    return cubic_interpolate(y_val, data['yData'], data['Hv']) - (HDelta + slope * (y_val - xDelta))
-                sol = root_scalar(find_y, bracket=[xB, xD], method='bisect')
-                y = sol.root
-        except:
+            yArr  = data['yData']
+            hvArr = data['Hv']
+            adj   = [hvArr[k] - slope * yArr[k] for k in range(len(yArr))]
+            rhs   = HDelta - slope * xDelta
+            # adj may increase or decrease — sort for interp
+            pairs_adj = sorted(zip(adj, yArr), key=lambda p: p[0])
+            adj_s = [p[0] for p in pairs_adj]
+            y_s   = [p[1] for p in pairs_adj]
+            # deduplicate adj
+            adj_u, y_u = [adj_s[0]], [y_s[0]]
+            for a, yv in zip(adj_s[1:], y_s[1:]):
+                if a > adj_u[-1]:
+                    adj_u.append(a); y_u.append(yv)
+            if len(adj_u) >= 2:
+                f_adj = interp1d(adj_u, y_u, kind='linear',
+                                 bounds_error=False, fill_value=(y_u[0], y_u[-1]))
+                y_new = float(f_adj(rhs))
+            else:
+                raise ValueError('adj degenerate')
+            if not np.isfinite(y_new) or y_new <= xB or y_new > xD:
+                raise ValueError('out of range')
+            y = y_new
+        except Exception:
             break
 
+        # Construction line (rectifying section only)
         if in_rectifying:
             try:
-                def find_x_end(x):
-                    return linear_interpolate(x, data['xData'], data['Hl']) - (HDelta + slope * (x - xDelta))
-                sol = root_scalar(find_x_end, bracket=[0, 1], method='bisect')
+                def _fx(x, _slope=slope, _HDelta=HDelta, _xDelta=xDelta):
+                    return linear_interpolate(x, data['xData'], data['Hl']) \
+                           - (_HDelta + _slope * (x - _xDelta))
+                sol = root_scalar(_fx, bracket=[0.0, 1.0], method='bisect')
                 xEnd = sol.root
                 HEnd = linear_interpolate(xEnd, data['xData'], data['Hl'])
-                construction_lines.append({'x': [xDelta, xEnd], 'y': [HDelta, HEnd]})
-            except: pass
+                construction_lines.append({'x': [float(xDelta), float(xEnd)],
+                                           'y': [float(HDelta),  float(HEnd)]})
+            except Exception:
+                pass
 
     return {
         'stages': stages, 'feed_stage': feed_stage,
@@ -392,115 +405,114 @@ def calculate_stages(xD, xB, zF, HF, q, R, D, W, xDeltaR, HDeltaR, xDeltaS, HDel
         'stage_compositions': stage_compositions, 'error': ''
     }
 
-def safe_hv_at_y(y_val, yData, Hv):
-    """Get HV at a given vapor composition y. Uses linear interp on (yData->Hv).
-    Safe for ammonia-like near-flat yData sequences."""
-    return linear_interpolate(y_val, yData, Hv)
-
-def safe_equil_y(x_val, xData, yData):
-    """Get equilibrium y at liquid composition x. Uses cubic then falls back to linear."""
-    result = cubic_interpolate(x_val, xData, yData)
-    if not np.isfinite(result):
-        result = linear_interpolate(x_val, xData, yData)
-    return result
+# ── main calculate ──────────────────────────────────────────────────────────
 
 def calculate(data, params):
-    zF = params['zF']; F = params['F']
-    xD = params['xD']; xB = params['xB']
-    q  = params['q'];  R  = params['R']
+    zF = float(params['zF']); F  = float(params['F'])
+    xD = float(params['xD']); xB = float(params['xB'])
+    q  = float(params['q']);  R  = float(params['R'])
 
-    # Validate input ranges
     xData = data['xData']
-    if zF < xData[0] or zF > xData[-1]:
-        return {'error': f'zF={zF} out of data range [{xData[0]}, {xData[-1]}]'}
-    if xD < xData[0] or xD > xData[-1]:
-        return {'error': f'xD={xD} out of data range [{xData[0]}, {xData[-1]}]'}
-    if xB < xData[0] or xB > xData[-1]:
-        return {'error': f'xB={xB} out of data range [{xData[0]}, {xData[-1]}]'}
+    yData = data['yData']
 
-    yF   = safe_equil_y(zF, data['xData'], data['yData'])
-    HLzF = linear_interpolate(zF, data['xData'], data['Hl'])
-    HVzF = safe_hv_at_y(yF, data['yData'], data['Hv'])
-    HF   = q * HLzF + (1 - q) * HVzF
-    HD   = linear_interpolate(xD, data['xData'], data['Hl'])
-    HW   = linear_interpolate(xB, data['xData'], data['Hl'])
+    # Clamp compositions to data range
+    zF = max(xData[0], min(xData[-1], zF))
+    xD = max(xData[0], min(xData[-1], xD))
+    xB = max(xData[0], min(xData[-1], xB))
 
-    debug_vals = {'yF': yF, 'HLzF': HLzF, 'HVzF': HVzF, 'HF': HF, 'HD': HD, 'HW': HW}
-    failed = [k for k, v in debug_vals.items() if not np.isfinite(v)]
-    if failed:
-        return {'error': f'Interpolation failed for: {failed}. Values: {debug_vals}'}
+    yF   = safe_equil_y(zF, xData, yData)
+    HLzF = linear_interpolate(zF, xData, data['Hl'])
+    HVzF = safe_hv_at_y(yF, yData, data['Hv'])
+    HF   = q * HLzF + (1.0 - q) * HVzF
+    HD   = linear_interpolate(xD, xData, data['Hl'])
+    HW   = linear_interpolate(xB, xData, data['Hl'])
+
+    bad = {k: v for k, v in
+           [('yF',yF),('HLzF',HLzF),('HVzF',HVzF),('HF',HF),('HD',HD),('HW',HW)]
+           if not np.isfinite(v)}
+    if bad:
+        return {'error': f'Interpolation failed: {bad}  |  '
+                         f'zF={zF}, xD={xD}, xB={xB}, yF={yF}  |  '
+                         f'xData=[{xData[0]},{xData[-1]}], '
+                         f'yData=[{yData[0]},{yData[-1]}]'}
 
     D = F * (zF - xB) / (xD - xB)
     W = F - D
 
-    # HVxD: HV at y=xD (distillate is pure liquid, use xD as y approximation)
-    HVxD = safe_hv_at_y(xD, data['yData'], data['Hv'])
+    # HVxD: HV at the distillate vapor composition
+    # For near-pure distillate xD ≈ 1, yData[-1] = 1, so linear_interp is fine
+    HVxD = safe_hv_at_y(xD, yData, data['Hv'])
     if not np.isfinite(HVxD):
-        # xD might be outside yData range — clamp to last known value
-        HVxD = data['Hv'][-1] if xD >= data['yData'][-1] else data['Hv'][0]
+        HVxD = float(data['Hv'][-1])   # fallback: pure-component value
 
-    Qc      = D * (HVxD - HD) * (R + 1)
+    Qc      = D * (HVxD - HD) * (R + 1.0)
     xDeltaR = xD
     HDeltaR = HD + Qc / D
 
     xDeltaS = xB
-    slope   = (HDeltaR - HF) / (xDeltaR - zF)
-    HDeltaS = HF + slope * (xDeltaS - zF)
-    Qr      = W * (HW - HDeltaS)
+    slope_op = (HDeltaR - HF) / (xDeltaR - zF)
+    HDeltaS  = HF + slope_op * (xDeltaS - zF)
+    Qr       = W * (HW - HDeltaS)
 
-    yFMin  = safe_equil_y(zF, data['xData'], data['yData'])
-    HVyF   = safe_hv_at_y(yFMin, data['yData'], data['Hv'])
+    yFMin    = yF   # same as equilibrium y at feed
+    HVyF     = safe_hv_at_y(yFMin, yData, data['Hv'])
     if not np.isfinite(HVyF):
-        return {'error': f'HVyF interpolation failed: yFMin={yFMin}, yData range=[{data["yData"][0]},{data["yData"][-1]}]'}
+        HVyF = float(data['Hv'][-1])
 
-    slopeMin        = (HVyF - HF) / (yFMin - zF) if abs(yFMin - zF) > 1e-8 else 0
+    denom_min = yFMin - zF
+    slopeMin  = (HVyF - HF) / denom_min if abs(denom_min) > 1e-8 else 0.0
     QPrimeMin       = HF + slopeMin * (xD - zF)
     QDoublePrimeMin = HF + slopeMin * (xB - zF)
-    RMin = (QPrimeMin - HVxD) / (HVxD - HD) if abs(HVxD - HD) > 1e-8 else float('nan')
+    RMin = (QPrimeMin - HVxD) / (HVxD - HD) if abs(HVxD - HD) > 1e-8 else 0.0
 
-    stage_results = calculate_stages(
-        xD, xB, zF, HF, q, R, D, W,
-        xDeltaR, HDeltaR, xDeltaS, HDeltaS, data
-    )
-    if stage_results['error']:
-        return {'error': stage_results['error']}
+    sr = calculate_stages(xD, xB, zF, HF, q, R, D, W,
+                          xDeltaR, HDeltaR, xDeltaS, HDeltaS, data)
+    if sr['error']:
+        return {'error': sr['error']}
 
-    x_range   = np.linspace(0, 1, 200).tolist()
-    HL_curve  = [linear_interpolate(xi, data['xData'], data['Hl']) for xi in x_range]
-    HV_curve  = [safe_hv_at_y(xi, data['yData'], data['Hv']) for xi in x_range]
-    y_equil   = [safe_equil_y(xi, data['xData'], data['yData']) for xi in x_range]
+    x_range  = np.linspace(0, 1, 200).tolist()
+    HL_curve = [linear_interpolate(xi, xData, data['Hl']) for xi in x_range]
+    HV_curve = [safe_hv_at_y(xi, yData, data['Hv'])      for xi in x_range]
+    y_equil  = [safe_equil_y(xi, xData, yData)            for xi in x_range]
 
-    y_vals = data['Hl'] + data['Hv'] + [HF, HD, HW, HDeltaR, HDeltaS, QPrimeMin, QDoublePrimeMin, HVyF]
-    y_vals = [v for v in y_vals if np.isfinite(v)]
-    yMin, yMax = min(y_vals) - abs(min(y_vals)) * 0.05 - 10, max(y_vals) + abs(max(y_vals)) * 0.05 + 10
+    all_H = (data['Hl'] + data['Hv'] +
+             [HF, HD, HW, HDeltaR, HDeltaS, QPrimeMin, QDoublePrimeMin, HVyF])
+    all_H = [v for v in all_H if np.isfinite(v)]
+    pad   = (max(all_H) - min(all_H)) * 0.08 + 50
+    yMin  = min(all_H) - pad
+    yMax  = max(all_H) + pad
 
     return {
         'D': round(D, 2), 'W': round(W, 2),
-        'xDeltaR': round(xDeltaR, 3), 'HDeltaR': round(HDeltaR, 2),
-        'xDeltaS': round(xDeltaS, 3), 'HDeltaS': round(HDeltaS, 2),
+        'xDeltaR': round(xDeltaR, 4), 'HDeltaR': round(HDeltaR, 2),
+        'xDeltaS': round(xDeltaS, 4), 'HDeltaS': round(HDeltaS, 2),
         'QcDuty': round(Qc, 2), 'QrDuty': round(Qr, 2),
         'QPrimeMin': round(QPrimeMin, 2), 'QDoublePrimeMin': round(QDoublePrimeMin, 2),
-        'RMin': round(RMin, 2),
-        'stages': stage_results['stages'], 'feed_stage': stage_results['feed_stage'],
-        'stage_compositions': stage_results['stage_compositions'],
-        'tie_lines': stage_results['tie_lines'],
-        'construction_lines': stage_results['construction_lines'],
-        'x_range': x_range, 'HL_curve': HL_curve, 'HV_curve': HV_curve,
-        'y_equilibrium': y_equil, 'yMin': yMin, 'yMax': yMax,
-        'HF': HF, 'zF': zF, 'xD': xD, 'xB': xB, 'yFMin': yFMin, 'HVyF': HVyF
+        'RMin': round(RMin, 3),
+        'stages': sr['stages'], 'feed_stage': sr['feed_stage'],
+        'stage_compositions': sr['stage_compositions'],
+        'tie_lines': sr['tie_lines'],
+        'construction_lines': sr['construction_lines'],
+        'x_range': x_range, 'HL_curve': HL_curve,
+        'HV_curve': HV_curve, 'y_equilibrium': y_equil,
+        'yMin': yMin, 'yMax': yMax,
+        'HF': HF, 'zF': zF, 'xD': xD, 'xB': xB,
+        'yFMin': yFMin, 'HVyF': HVyF
     }
 
 def calculate_from_js(xData, yData, Hl, Hv, zF, F, xD, xB, q, R):
     try:
         data = {
-            'xData': [float(x) for x in xData], 'yData': [float(y) for y in yData],
-            'Hl': [float(h) for h in Hl], 'Hv': [float(h) for h in Hv]
+            'xData': [float(v) for v in xData],
+            'yData': [float(v) for v in yData],
+            'Hl':    [float(v) for v in Hl],
+            'Hv':    [float(v) for v in Hv],
         }
-        params = {'zF': float(zF), 'F': float(F), 'xD': float(xD),
-                  'xB': float(xB), 'q': float(q), 'R': float(R)}
+        params = {'zF': zF, 'F': F, 'xD': xD, 'xB': xB, 'q': q, 'R': R}
         return json.dumps(calculate(data, params))
     except Exception as e:
-        return json.dumps({'error': str(e)})
+        import traceback
+        return json.dumps({'error': str(e) + ' | ' + traceback.format_exc()})
 `;
     pyodide.runPython(pythonCode);
     console.log('✅ Calculator code loaded!');
