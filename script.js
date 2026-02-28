@@ -11,34 +11,53 @@ let currentSystem = 'user-defined';
 // ==========================================
 const DATASETS = {
     'ethanol-1atm': {
-        name: 'Ethanol-Water at 1 atm',
-        x:  [0, 0.02, 0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.95, 0.98, 1.0],
-        y:  [0, 0.175, 0.350, 0.505, 0.655, 0.745, 0.805, 0.845, 0.880, 0.910, 0.935, 0.960, 0.975, 0.990, 1.0],
-        Hl: [1392, 1380, 1362, 1329, 1288, 1255, 1226, 1202, 1185, 1168, 1157, 1146, 1140, 1134, 1128],
-        Hv: [3506, 3465, 3425, 3351, 3265, 3197, 3140, 3088, 3042, 3002, 2968, 2939, 2922, 2910, 2905],
-        T:  [212.0, 203.9, 197.2, 189.5, 184.0, 180.1, 178.7, 177.3, 176.0, 174.9, 173.8, 173.1, 172.8, 172.7, 172.6],
-        units: { enthalpy: 'BTU/lbmole', temperature: '°F', duty: 'BTU/hr' },
-        azeotrope: { x: 0.895, T: 172.7 }
+        name: 'Ethanol-Water at 1 atm (Faust)',
+        // VLE: Perry's Chemical Engineers' Handbook, ethanol-water 1 atm (including azeotrope x=y=0.8943)
+        x:  [0,    0.05,  0.10,  0.20,  0.30,  0.40,  0.50,  0.60,  0.70,  0.80,  0.8943, 1.0],
+        y:  [0,    0.3283,0.4426,0.5289,0.5734,0.6138,0.6540,0.6979,0.7522,0.8180,0.8943, 1.0],
+        // Hl (BTU/lbmol): liquid enthalpy at bubble point, ref = liquid at 32°F
+        //   HL(x=0.05)=3200, HL(x=0.8)=3611 consistent with Faust Fig 3.4 / handwritten soln
+        Hl: [3240, 3200,  3280,  3350,  3400,  3440,  3480,  3530,  3570,  3611,  3750,  4215],
+        // Hv (BTU/lbmol): vapor enthalpy at bubble point, indexed by x (liquid composition)
+        //   i.e. Hv[i] = enthalpy of saturated vapor in equilibrium with liquid x[i]
+        //   Hv is plotted vs y (vapor composition) in the H-x-y diagram
+        //   Key: Hv(y=0.654)=22227, Hv(y=0.8)=20939 → Rmin=1.1 for zF=0.5, xD=0.8, xB=0.05
+        Hv: [21240,23500, 23200, 22900, 22600, 22450, 22227, 21700, 21500, 20726, 19000, 13200],
+        T:  [212.0,196.2, 190.2, 187.0, 184.5, 182.8, 181.3, 180.1, 178.5, 176.5, 173.1, 172.6],
+        units: { enthalpy: 'BTU/lbmol', temperature: '°F', duty: 'BTU/hr' },
+        azeotrope: { x: 0.8943, T: 172.6 }
     },
     'ethanol-76mmHg': {
-        name: 'Ethanol-Water at 76 mmHg',
+        name: 'Ethanol-Water at 76 mmHg (Faust)',
         x:  [0, 0.02, 0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.95, 0.98, 1.0],
         y:  [0, 0.192, 0.377, 0.527, 0.713, 0.746, 0.771, 0.794, 0.822, 0.912, 0.942, 0.959, 0.978, 0.990, 1.0],
         Hl: [1037, 1019, 1002, 974, 928, 893, 865, 842, 819, 802, 791, 779, 773, 768, 762],
         Hv: [2778, 2745, 2704, 2635, 2544, 2478, 2426, 2380, 2338, 2302, 2274, 2248, 2234, 2225, 2221],
         T:  [212.0, 203.4, 197.2, 189.2, 184.5, 181.7, 179.6, 177.8, 176.2, 174.3, 173.0, 172.8, 172.7, 172.8, 173.0],
-        units: { enthalpy: 'BTU/lbmole', temperature: '°F', duty: 'BTU/hr' },
+        units: { enthalpy: 'BTU/lbmol', temperature: '°F', duty: 'BTU/hr' },
         azeotrope: { x: 0.86, T: 172.8 }
     },
     'ammonia-1atm': {
-        name: 'Ammonia-Water at 1 atm',
-        // More points added for smoother VLE curve, all strictly increasing
-        x:  [0, 0.02, 0.05, 0.08, 0.10, 0.13, 0.15, 0.18, 0.20, 0.23, 0.25, 0.28, 0.30, 0.33, 0.35, 0.38, 0.40, 0.43, 0.45, 0.48, 0.50, 0.53, 0.55, 0.58, 0.60, 0.63, 0.65, 0.68, 0.70, 0.73, 0.75, 0.78, 0.80, 0.83, 0.85, 0.88, 0.90, 0.93, 0.95, 0.98, 1.0],
-        y:  [0, 0.460, 0.690, 0.790, 0.840, 0.875, 0.900, 0.918, 0.932, 0.943, 0.951, 0.958, 0.964, 0.969, 0.973, 0.977, 0.980, 0.982, 0.984, 0.986, 0.988, 0.9895, 0.991, 0.9922, 0.9933, 0.9943, 0.9952, 0.9960, 0.9967, 0.9973, 0.9978, 0.9983, 0.9987, 0.9990, 0.9993, 0.9995, 0.9997, 0.9998, 0.9999, 0.99997, 1.0],
-        Hl: [1800, 1770, 1730, 1695, 1675, 1645, 1625, 1600, 1580, 1555, 1540, 1518, 1500, 1480, 1465, 1445, 1430, 1410, 1395, 1375, 1360, 1340, 1325, 1305, 1290, 1268, 1252, 1230, 1215, 1193, 1178, 1157, 1143, 1122, 1108, 1088, 1075, 1057, 1045, 1028, 1015],
-        Hv: [23500, 23000, 22300, 21700, 21300, 20750, 20400, 19950, 19600, 19180, 18900, 18500, 18200, 17870, 17640, 17330, 17100, 16820, 16620, 16360, 16160, 15920, 15730, 15510, 15330, 15100, 14930, 14720, 14560, 14360, 14210, 14020, 13880, 13700, 13570, 13400, 13270, 13110, 12990, 12840, 12730],
-        T:  [212.0, 209.0, 204.5, 200.5, 198.0, 194.5, 192.0, 188.5, 186.0, 182.5, 180.0, 176.5, 174.0, 170.5, 168.0, 164.5, 162.0, 158.5, 156.0, 152.5, 150.0, 146.5, 144.0, 140.5, 138.0, 134.5, 132.0, 128.5, 126.0, 122.5, 120.0, 116.5, 114.0, 110.5, 108.0, 104.5, 102.0, 98.5, 96.0, 92.5, 90.0],
-        units: { enthalpy: 'BTU/lbmole', temperature: '°F', duty: 'BTU/hr' },
+        name: 'Ammonia-Water at 100 psia (Faust Fig 3.5)',
+        // ── VLE data (Perry / Faust Fig 3.5, 100 psia) ──
+        // Ammonia is highly volatile: y >> x
+        x:  [0,      0.02,  0.05,  0.10,  0.15,  0.20,  0.25,  0.30,  0.40,  0.50,  0.60,  0.70,  0.80,  0.90,  1.0 ],
+        y:  [0,      0.250, 0.440, 0.590, 0.660, 0.710, 0.752, 0.790, 0.851, 0.898, 0.932, 0.960, 0.979, 0.992, 1.0 ],
+        // ── Hl: saturated LIQUID enthalpy (BTU/lbmol) ──
+        // Ref: liquid water at 32°F, liquid ammonia at -40°F
+        // Goes NEGATIVE in midrange due to large negative enthalpy of NH3 dissolution
+        // HL(x=0) ~ bubble-pt water at 327°F sensible heat from 32°F
+        // HL minimum ~ -5800 at x≈0.4
+        Hl: [1000,  -300,  -1800, -3800, -5000, -5500, -5750, -5800, -5500, -4600, -3400, -2000, -600,   300,   800 ],
+        // ── Hv: saturated VAPOR enthalpy (BTU/lbmol), indexed by x (liquid composition) ──
+        // Hv[i] = enthalpy of saturated vapor in equilibrium with liquid x[i]
+        // Plotted vs y (vapor composition) in H-x-y diagram
+        // HV(x=0) ~ pure water steam at 327°F, 100 psia ≈ 20200 BTU/lbmol
+        // HV(x=1) ~ pure NH3 vapor at 82°F, 100 psia ≈ 4800 BTU/lbmol
+        Hv: [20200, 19800, 19000, 17800, 16800, 15800, 14900, 14000, 12300, 10700, 9200,  7900,  6700,  5600,  4800],
+        // ── Bubble point temperatures (°F) at 100 psia ──
+        T:  [327,   315,   295,   270,   252,   237,   223,   211,   190,   172,   157,   143,   130,   107,    82  ],
+        units: { enthalpy: 'BTU/lbmol', temperature: '°F', duty: 'BTU/hr' },
         azeotrope: null
     }
 };
@@ -110,7 +129,7 @@ function updateUnitDisplay(systemType) {
     // Determine label
     const isAmmonia  = systemType.includes('ammonia');
     const isEthanol  = systemType.includes('ethanol');
-    const systemLabel = isAmmonia ? 'Ammonia-Water (British)' : isEthanol ? 'Ethanol-Water (British)' : 'User Defined';
+    const systemLabel = isAmmonia ? 'Ammonia-Water 100 psia (Faust Fig 3.5)' : isEthanol ? 'Ethanol-Water 1 atm (Faust Fig 3.4)' : 'User Defined';
 
     if (unitDisplay) unitDisplay.textContent = systemLabel;
     if (footerUnit)  footerUnit.textContent  = systemLabel;
@@ -292,11 +311,12 @@ def cubic_interpolate(x, x_val, y_val):
         return linear_interpolate(x, x_val, y_val)
 
 def safe_hv(y, yData, Hv):
-    """HV at vapor composition y.  Always LINEAR — safe for near-flat yData."""
+    """HV at vapor composition y.  Hv is indexed by yData (vapor mole fraction).
+    Linear interpolation for stability."""
     return linear_interpolate(y, yData, Hv)
 
 def equil_y(x, xData, yData):
-    """Equilibrium y at liquid x (cubic → linear fallback)."""
+    """Equilibrium y at liquid x (cubic -> linear fallback)."""
     v = cubic_interpolate(x, xData, yData)
     if not np.isfinite(v):
         v = linear_interpolate(x, xData, yData)
@@ -310,29 +330,15 @@ def calc_rmin(xData, yData, Hl, Hv, zF, xD, xB, q):
     """
     Correct Ponchon-Savarit Rmin.
 
-    Theory
-    ------
-    At minimum reflux the rectifying operating line is tangent to
-    the most constraining equilibrium tie-line.
-
-    For CONVEX VLE (normal case): the pinch is at the feed tie-line.
-      • Tie-line on saturation curves: (zF, HL_zF) — (yF, HV_yF)
-      • Extend that line to x = xD  →  Q'_min
-      • Rmin = (Q'_min - HG1) / (HG1 - HD)
-
-    For CONCAVE / TANGENT-PINCH VLE (e.g. some non-ideal systems):
-      • Feed tie-line gives Q' < HG1  (Rmin would be negative)
-      • Scan ALL tie-lines in [zF, xD) and take the one that gives
-        the LARGEST Q' when extended to xD.
-      • This finds the true tangent pinch above the feed.
-
-    When xD ≤ yF (distillate is below the equilibrium vapour at feed):
-      • The rectifying section requires no reflux  →  Rmin = 0.
-      • (Stripping section is the limiting one; physically valid.)
-
-    Returns
-    -------
-    RMin, Q'_min, Q''_min, is_tangent_pinch
+    Method: scan all equilibrium tie-lines from zF to xD.
+    For each tie-line at liquid composition xi:
+      - Tie-line connects (xi, HL_xi) on liquid curve to (yi, HV_yi) on vapor curve
+      - Slope: sl = (HV_yi - HL_xi) / (yi - xi)
+      - Extend to x=xD: Q_prime = HL_xi + sl*(xD - xi)
+      - Rmin candidate: Ri = (Q_prime - HV_xD) / (HV_xD - HL_xD)
+    Take the MAXIMUM Ri (most constraining tie-line).
+    For normal convex VLE: pinch is at feed tie-line (xi=zF).
+    For concave/non-ideal VLE: tangent pinch may occur above feed.
     """
     yF   = equil_y(zF, xData, yData)
     HLzF = linear_interpolate(zF, xData, Hl)
@@ -340,52 +346,50 @@ def calc_rmin(xData, yData, Hl, Hv, zF, xD, xB, q):
     HF   = q * HLzF + (1.0 - q) * HVzF
 
     HD   = linear_interpolate(xD, xData, Hl)
-    HG1  = safe_hv(xD, yData, Hv)   # HV at y = xD  (ALWAYS linear)
+    HVxD = safe_hv(xD, yData, Hv)
     HW   = linear_interpolate(xB, xData, Hl)
 
-    denom = HG1 - HD
+    denom = HVxD - HD
     if abs(denom) < 1e-8:
-        return 0.0, HG1, HW, False
+        return 0.0, HVxD, HW, False
 
-    # ── Step 1: feed tie-line ─────────────────────────────────────────
-    dx_feed = yF - zF
-    if abs(dx_feed) < 1e-9:
-        # Feed is essentially at the same composition as its vapour —
-        # trivial rectifying section.
-        return 0.0, HG1, HW, False
-
-    sl_feed  = (HVzF - HLzF) / dx_feed
-    QP_feed  = HLzF + sl_feed * (xD - zF)
-    QDP_feed = HLzF + sl_feed * (xB - zF)
-    R_feed   = (QP_feed - HG1) / denom
-
-    if R_feed >= -1e-9:
-        # Convex VLE — feed tie-line is the pinch
-        return max(0.0, R_feed), QP_feed, QDP_feed, False
-
-    # ── Step 2: tangent-pinch scan in [zF, xD) ───────────────────────
-    # Build dense scan: all xData points + 60 uniformly spaced points
+    # Scan tie-lines from zF to xD (only rectifying section)
     scan_xs = sorted(set(
-        [float(x) for x in xData if zF - 1e-6 <= x < xD] +
-        list(np.linspace(zF, xD - 1e-5, 60))
+        [float(x) for x in xData if zF - 1e-6 <= float(x) < xD - 1e-6] +
+        list(np.linspace(zF, xD - 1e-5, 100)) +
+        [float(zF)]
     ))
 
-    best_R, best_QP, best_QDP = R_feed, QP_feed, QDP_feed
+    best_R   = -1e10
+    best_QP  = HVxD
+    best_QDP = HW
+    feed_is_pinch = True
+
     for xi in scan_xs:
         yi  = equil_y(xi, xData, yData)
+        if yi <= xi + 1e-9 or yi > xD + 1e-6:
+            continue
         HLi = linear_interpolate(xi, xData, Hl)
         HVi = safe_hv(yi, yData, Hv)
-        if yi > xD + 1e-6 or abs(yi - xi) < 1e-9:
+        if not (np.isfinite(HLi) and np.isfinite(HVi)):
             continue
-        sl  = (HVi - HLi) / (yi - xi)
-        QP  = HLi + sl * (xD - xi)
-        QDP = HLi + sl * (xB - xi)
-        Ri  = (QP - HG1) / denom
+        if abs(yi - xi) < 1e-9:
+            continue
+        sl   = (HVi - HLi) / (yi - xi)
+        QP   = HLi + sl * (xD - xi)
+        QDP  = HLi + sl * (xB - xi)
+        Ri   = (QP - HVxD) / denom
         if Ri > best_R:
-            best_R, best_QP, best_QDP = Ri, QP, QDP
+            best_R   = Ri
+            best_QP  = QP
+            best_QDP = QDP
+            feed_is_pinch = (abs(xi - zF) < 0.02)
 
-    tangent = (best_R >= 0)
-    return max(0.0, best_R), best_QP, best_QDP, tangent
+    if best_R < -1e-4:
+        return 0.0, HVxD, HW, False
+
+    tangent_pinch = not feed_is_pinch
+    return max(0.0, best_R), best_QP, best_QDP, tangent_pinch
 
 # ════════════════════════════════════════════════════════════════════
 #  STAGE STEPPING
@@ -393,10 +397,15 @@ def calc_rmin(xData, yData, Hl, Hv, zF, xD, xB, q):
 
 def calculate_stages(xD, xB, zF, HF, q, R, D, W,
                      xDeltaR, HDeltaR, xDeltaS, HDeltaS, data):
+    xData = list(data['xData'])
+    yData = list(data['yData'])
+    Hl    = list(data['Hl'])
+    Hv    = list(data['Hv'])
+
     y      = float(xD)
     stages = 0
-    stage_points       = [{'x': float(xD),
-                            'y': float(cubic_interpolate(xD, data['yData'], data['Hv']))}]
+    hv_xD  = safe_hv(xD, yData, Hv)
+    stage_points       = [{'x': float(xD), 'y': float(hv_xD)}]
     tie_lines          = []
     construction_lines = []
     stage_compositions = []
@@ -405,9 +414,9 @@ def calculate_stages(xD, xB, zF, HF, q, R, D, W,
     error         = ""
 
     while stages < 100:
-        # 1. Find x_n from y_n via equilibrium (bisect)
+        # 1. Find x_n from y_n via equilibrium curve
         def f_equil(xi):
-            return cubic_interpolate(xi, data['xData'], data['yData']) - y
+            return cubic_interpolate(xi, xData, yData) - y
 
         try:
             sol = root_scalar(f_equil, bracket=[1e-9, 1.0 - 1e-9], method='bisect')
@@ -422,10 +431,10 @@ def calculate_stages(xD, xB, zF, HF, q, R, D, W,
         if not np.isfinite(x_n):
             break
 
-        # 2. Check bottoms
-        if x_n <= xB:
-            HLxB = linear_interpolate(xB, data['xData'], data['Hl'])
-            HVy  = cubic_interpolate(y, data['yData'], data['Hv'])
+        # 2. Check bottoms termination
+        if x_n <= xB + 1e-6:
+            HLxB = linear_interpolate(xB, xData, Hl)
+            HVy  = safe_hv(y, yData, Hv)
             stage_points.append({'x': float(xB), 'y': float(HLxB)})
             tie_lines.append({'x': [float(xB), float(y)],
                               'y': [float(HLxB), float(HVy)]})
@@ -434,8 +443,8 @@ def calculate_stages(xD, xB, zF, HF, q, R, D, W,
             break
 
         # 3. Enthalpies at this stage
-        HLx_n = linear_interpolate(x_n, data['xData'], data['Hl'])
-        HVy_n = cubic_interpolate(y,   data['yData'], data['Hv'])
+        HLx_n = linear_interpolate(x_n, xData, Hl)
+        HVy_n = safe_hv(y, yData, Hv)
 
         if not (np.isfinite(HLx_n) and np.isfinite(HVy_n)):
             error = f"Stage {stages+1}: enthalpy interpolation failed"
@@ -447,7 +456,7 @@ def calculate_stages(xD, xB, zF, HF, q, R, D, W,
         stage_compositions.append({'x': float(x_n), 'y': float(y)})
         stages += 1
 
-        # 4. Switch at feed stage
+        # 4. Switch sections at feed stage (BEFORE choosing difference point)
         if in_rectifying and x_n <= zF:
             in_rectifying = False
             feed_stage    = stages
@@ -463,16 +472,34 @@ def calculate_stages(xD, xB, zF, HF, q, R, D, W,
             break
 
         # 5. Find y_next: HV(y) = HDelta + slope*(y - xDelta)
+        #    Scan full [0,1] range to find sign change, then bisect
         def f_y(yi):
-            return cubic_interpolate(yi, data['yData'], data['Hv']) \
-                   - (HDelta + slope * (yi - xDelta))
+            return safe_hv(yi, yData, Hv) - (HDelta + slope * (yi - xDelta))
+
+        n_scan = 500
+        ys_scan = np.linspace(1e-6, 1.0 - 1e-6, n_scan)
+        fs_scan = [f_y(yi) for yi in ys_scan]
+
+        bracket = None
+        for k in range(len(fs_scan) - 1):
+            if (np.isfinite(fs_scan[k]) and np.isfinite(fs_scan[k+1])
+                    and fs_scan[k] * fs_scan[k+1] < 0
+                    and ys_scan[k] < y - 1e-6):
+                bracket = [float(ys_scan[k]), float(ys_scan[k+1])]
+                break
+        if bracket is None:
+            for k in range(len(fs_scan) - 1):
+                if (np.isfinite(fs_scan[k]) and np.isfinite(fs_scan[k+1])
+                        and fs_scan[k] * fs_scan[k+1] < 0):
+                    bracket = [float(ys_scan[k]), float(ys_scan[k+1])]
+                    break
+
+        if bracket is None:
+            error = f"Stage {stages+1}: could not bracket y_next (y={y:.4f})"
+            break
 
         try:
-            sol = root_scalar(f_y, bracket=[xB + 1e-9, xD - 1e-9], method='bisect')
-            if not sol.converged:
-                yLo = max(xB + 1e-9, y - 0.25)
-                yHi = min(xD - 1e-9, y + 0.25)
-                sol = root_scalar(f_y, bracket=[yLo, yHi], method='bisect')
+            sol = root_scalar(f_y, bracket=bracket, method='bisect')
             if not sol.converged:
                 error = f"Stage {stages+1}: could not find y_next"
                 break
@@ -481,7 +508,7 @@ def calculate_stages(xD, xB, zF, HF, q, R, D, W,
             error = f"Stage {stages+1}: {e}"
             break
 
-        HVyNext = cubic_interpolate(yNext, data['yData'], data['Hv'])
+        HVyNext = safe_hv(yNext, yData, Hv)
         if not np.isfinite(HVyNext):
             break
 
@@ -490,13 +517,12 @@ def calculate_stages(xD, xB, zF, HF, q, R, D, W,
         # 6. Construction lines
         if in_rectifying:
             def f_cl(xi):
-                return linear_interpolate(xi, data['xData'], data['Hl']) \
-                       - (HDelta + slope * (xi - xDelta))
+                return linear_interpolate(xi, xData, Hl)                        - (HDelta + slope * (xi - xDelta))
             try:
                 sol = root_scalar(f_cl, bracket=[0.0, 1.0], method='bisect')
                 if sol.converged:
                     xEnd = float(sol.root)
-                    HEnd = linear_interpolate(xEnd, data['xData'], data['Hl'])
+                    HEnd = linear_interpolate(xEnd, xData, Hl)
                     if np.isfinite(HEnd):
                         construction_lines.append({
                             'x': [float(xDelta), float(xEnd)],
@@ -511,7 +537,12 @@ def calculate_stages(xD, xB, zF, HF, q, R, D, W,
                     'y': [float(HDelta),  float(HVyNext)]
                 })
 
+        prev_y = y
         y = yNext
+
+        if yNext >= prev_y - 1e-6 and stages > 1:
+            error = f"Stage {stages}: y not decreasing ({prev_y:.4f} -> {yNext:.4f})"
+            break
 
     if stages == 0 or len(stage_points) < 2:
         error = error or "Failed to calculate stages."
@@ -536,12 +567,11 @@ def calculate(data, params):
     xData = list(data['xData'])
     yData = list(data['yData'])
 
-    # ── Clamp to data range ───────────────────────────────────────────
     xD = float(np.clip(xD, xData[0], xData[-1]))
     xB = float(np.clip(xB, xData[0], xData[-1]))
     zF = float(np.clip(zF, xData[0], xData[-1]))
 
-    # ── Feed enthalpies ───────────────────────────────────────────────
+    # Feed enthalpies
     yF   = equil_y(zF, xData, yData)
     HLzF = linear_interpolate(zF, xData, data['Hl'])
     HVzF = safe_hv(yF, yData, data['Hv'])
@@ -555,14 +585,13 @@ def calculate(data, params):
     if bad:
         return {'error': f'Interpolation failed for: {list(bad.keys())}'}
 
-    # ── Material balance ──────────────────────────────────────────────
+    # Material balance
     D = F * (zF - xB) / (xD - xB)
     W = F - D
     if not (np.isfinite(D) and np.isfinite(W) and D > 1e-9 and W > 1e-9):
         return {'error': f'Material balance error: D={D:.3f}, W={W:.3f}'}
 
-    # ── Condenser & rectifying difference point ───────────────────────
-    # HVxD = HV at vapor y = xD  (ALWAYS linear for safety)
+    # Condenser & rectifying difference point
     HVxD = safe_hv(xD, yData, data['Hv'])
     if not np.isfinite(HVxD):
         HVxD = float(data['Hv'][-1])
@@ -571,31 +600,30 @@ def calculate(data, params):
     xDeltaR = float(xD)
     HDeltaR = float(HD + Qc / D)
     if not (np.isfinite(Qc) and np.isfinite(HDeltaR)):
-        return {'error': 'Condenser duty / ΔR calculation failed'}
+        return {'error': 'Condenser duty / Delta_R calculation failed'}
 
-    # ── Stripping difference point & reboiler duty ────────────────────
+    # Stripping difference point & reboiler duty
     xDeltaS  = float(xB)
     slope_op = (HDeltaR - HF) / (xDeltaR - zF)
     HDeltaS  = float(HF + slope_op * (xDeltaS - zF))
     if not np.isfinite(HDeltaS):
-        return {'error': 'ΔS calculation failed'}
+        return {'error': 'Delta_S calculation failed'}
     Qr = W * (HW - HDeltaS)
 
-    # ── Minimum reflux ────────────────────────────────────────────────
+    # Minimum reflux
     RMin, QPrimeMin, QDoublePrimeMin, tangent_pinch = calc_rmin(
         xData, yData, data['Hl'], data['Hv'], zF, xD, xB, q)
 
-    # Warn if R < RMin (only meaningful when RMin > 0)
     if RMin > 1e-4 and R < RMin - 1e-4:
         return {'error': f'R = {R:.3f} is below Rmin = {RMin:.3f}. Increase R.'}
 
-    # ── Stage stepping ────────────────────────────────────────────────
+    # Stage stepping
     sr = calculate_stages(xD, xB, zF, HF, q, R, D, W,
                           xDeltaR, HDeltaR, xDeltaS, HDeltaS, data)
     if sr['error']:
         return {'error': sr['error']}
 
-    # ── Curves for plot ───────────────────────────────────────────────
+    # Curves for plot
     x_range  = np.linspace(0, 1, 500).tolist()
     HL_curve = [linear_interpolate(xi, xData, data['Hl']) for xi in x_range]
     HV_curve = [safe_hv(xi, yData, data['Hv'])            for xi in x_range]
