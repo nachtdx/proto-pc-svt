@@ -4,6 +4,65 @@
 let pyodide = null;
 let pyodideReady = false;
 let currentResults = null;
+let currentSystem = 'user-defined';
+
+// ==========================================
+// ETHANOL-WATER DATASET (BRITISH UNITS ONLY)
+// ==========================================
+const ETHANOL_WATER_DATA = {
+    '1atm': {
+        name: 'Ethanol-Water at 1 atm',
+        // Data dalam British Units (BTU/lbmole, °F)
+        x: [0, 0.02, 0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.95, 0.98, 1.0],
+        y: [0, 0.175, 0.350, 0.505, 0.655, 0.745, 0.805, 0.845, 0.880, 0.910, 0.935, 0.960, 0.975, 0.990, 1.0],
+        // Entalpi dalam BTU/lbmole
+        Hl: [1392, 1380, 1362, 1329, 1288, 1255, 1226, 1202, 1185, 1168, 1157, 1146, 1140, 1134, 1128],
+        Hv: [3506, 3465, 3425, 3351, 3265, 3197, 3140, 3088, 3042, 3002, 2968, 2939, 2922, 2910, 2905],
+        // Temperatur dalam °F
+        T: [212.0, 203.9, 197.2, 189.5, 184.0, 180.1, 178.7, 177.3, 176.0, 174.9, 173.8, 173.1, 172.8, 172.7, 172.6],
+        
+        description: 'Ethanol-Water at 1 atm',
+        units: {
+            enthalpy: 'BTU/lbmole',
+            temperature: '°F',
+            composition: 'mole fraction'
+        },
+        azeotrope: {
+            x: 0.895,
+            y: 0.895,
+            T: 172.7,
+            Hl: 1142,
+            Hv: 2925
+        },
+        source: 'Perry\'s Handbook (converted to British units)'
+    },
+    
+    '76mmHg': {
+        name: 'Ethanol-Water at 76 mmHg',
+        x: [0, 0.02, 0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.95, 0.98, 1.0],
+        y: [0, 0.192, 0.377, 0.527, 0.713, 0.746, 0.771, 0.794, 0.822, 0.912, 0.942, 0.959, 0.978, 0.990, 1.0],
+        // Entalpi dalam BTU/lbmole
+        Hl: [1037, 1019, 1002, 974, 928, 893, 865, 842, 819, 802, 791, 779, 773, 768, 762],
+        Hv: [2778, 2745, 2704, 2635, 2544, 2478, 2426, 2380, 2338, 2302, 2274, 2248, 2234, 2225, 2221],
+        // Temperatur dalam °F
+        T: [212.0, 203.4, 197.2, 189.2, 184.5, 181.7, 179.6, 177.8, 176.2, 174.3, 173.0, 172.8, 172.7, 172.8, 173.0],
+        
+        description: 'Ethanol-Water at 76 mmHg',
+        units: {
+            enthalpy: 'BTU/lbmole',
+            temperature: '°F',
+            composition: 'mole fraction'
+        },
+        azeotrope: {
+            x: 0.86,
+            y: 0.86,
+            T: 172.8,
+            Hl: 790,
+            Hv: 2250
+        },
+        source: 'Literature data (converted to British units)'
+    }
+};
 
 // ==========================================
 // PARSE ARRAY STRING
@@ -40,6 +99,126 @@ function validateArray(arr, name) {
 }
 
 // ==========================================
+// UPDATE UNIT DISPLAY
+// ==========================================
+function updateUnitDisplay(systemType) {
+    const isBritish = systemType.includes('ethanol');
+    const unitDisplay = document.getElementById('unitDisplay');
+    const hlUnit = document.getElementById('hlUnit');
+    const hvUnit = document.getElementById('hvUnit');
+    const previewUnitBadge = document.getElementById('previewUnitBadge');
+    const dataInfoText = document.getElementById('dataInfoText');
+    const unitNote = document.getElementById('unitNote');
+    
+    if (isBritish) {
+        unitDisplay.textContent = 'British Units (BTU/lbmole, °F)';
+        unitDisplay.className = 'unit-badge bg-primary text-white';
+        hlUnit.textContent = 'BTU/lbmole';
+        hvUnit.textContent = 'BTU/lbmole';
+        previewUnitBadge.textContent = 'BTU/lbmole';
+        dataInfoText.innerHTML = 'Ethanol-Water dataset in British Units';
+        unitNote.innerHTML = '<b>British Units:</b> Enthalpy in BTU/lbmole, Temperature in °F';
+        
+        // Set inputs to readonly
+        document.getElementById('xData').readOnly = true;
+        document.getElementById('yData').readOnly = true;
+        document.getElementById('Hl').readOnly = true;
+        document.getElementById('Hv').readOnly = true;
+    } else {
+        unitDisplay.textContent = 'User Defined (any units)';
+        unitDisplay.className = 'unit-badge';
+        hlUnit.textContent = 'any units';
+        hvUnit.textContent = 'any units';
+        previewUnitBadge.textContent = 'any units';
+        dataInfoText.innerHTML = 'Input data sebagai array. Pisahkan dengan koma.';
+        unitNote.innerHTML = 'User Defined: bebas menggunakan satuan apapun (SI, British, dll)';
+        
+        // Set inputs to editable
+        document.getElementById('xData').readOnly = false;
+        document.getElementById('yData').readOnly = false;
+        document.getElementById('Hl').readOnly = false;
+        document.getElementById('Hv').readOnly = false;
+    }
+}
+
+// ==========================================
+// LOAD ETHANOL-WATER DATASET
+// ==========================================
+function loadEthanolWaterDataset(pressure) {
+    const dataset = ETHANOL_WATER_DATA[pressure];
+    if (!dataset) return;
+    
+    // Update input fields with British units data
+    document.getElementById('xData').value = JSON.stringify(dataset.x);
+    document.getElementById('yData').value = JSON.stringify(dataset.y);
+    document.getElementById('Hl').value = JSON.stringify(dataset.Hl);
+    document.getElementById('Hv').value = JSON.stringify(dataset.Hv);
+    
+    // Store temperature data for reference
+    document.getElementById('TData').value = JSON.stringify(dataset.T);
+    
+    // Update system info display
+    const systemInfo = document.getElementById('systemInfo');
+    const systemInfoText = document.getElementById('systemInfoText');
+    systemInfo.style.display = 'block';
+    
+    let azeoInfo = '';
+    if (dataset.azeotrope) {
+        azeoInfo = `<br>📍 Azeotrope: x = ${dataset.azeotrope.x.toFixed(3)}, T = ${dataset.azeotrope.T.toFixed(1)}°F`;
+    }
+    
+    systemInfoText.innerHTML = `
+        <b>${dataset.name}</b><br>
+        📊 ${dataset.x.length} data points<br>
+        🔥 Enthalpy: <b>${dataset.units.enthalpy}</b><br>
+        🌡️ Temperature: <b>${dataset.units.temperature}</b><br>
+        📈 Composition: <b>${dataset.units.composition}</b>${azeoInfo}
+    `;
+    
+    // Update unit display
+    updateUnitDisplay(`ethanol-${pressure}`);
+    
+    // Update preview
+    updatePreview();
+    
+    // Show success message
+    showToast(`✅ Loaded ${dataset.name} (British Units)`, 'success');
+}
+
+// ==========================================
+// SHOW TOAST MESSAGE
+// ==========================================
+function showToast(message, type = 'info') {
+    const toastContainer = document.getElementById('toastContainer');
+    
+    const toastId = 'toast_' + Date.now();
+    const toast = document.createElement('div');
+    toast.id = toastId;
+    toast.className = `toast align-items-center text-white bg-${type} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'assertive');
+    toast.setAttribute('aria-atomic', 'true');
+    
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    
+    const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+    bsToast.show();
+    
+    toast.addEventListener('hidden.bs.toast', () => {
+        toast.remove();
+    });
+}
+
+// ==========================================
 // UPDATE PREVIEW TABLE
 // ==========================================
 function updatePreview() {
@@ -51,19 +230,34 @@ function updatePreview() {
     const lengths = [xData.length, yData.length, Hl.length, Hv.length];
     const maxLength = Math.max(...lengths);
     
+    const systemType = document.getElementById('systemType').value;
+    const isBritish = systemType.includes('ethanol');
+    
     let html = '';
     for (let i = 0; i < maxLength; i++) {
         html += '<tr>';
         html += `<td>${i + 1}</td>`;
         html += `<td>${i < xData.length ? xData[i].toFixed(3) : '-'}</td>`;
         html += `<td>${i < yData.length ? yData[i].toFixed(3) : '-'}</td>`;
-        html += `<td>${i < Hl.length ? Hl[i].toFixed(2) : '-'}</td>`;
-        html += `<td>${i < Hv.length ? Hv[i].toFixed(2) : '-'}</td>`;
+        
+        if (i < Hl.length) {
+            html += `<td>${isBritish ? Hl[i].toFixed(0) : Hl[i].toFixed(2)}</td>`;
+        } else {
+            html += '<td>-</td>';
+        }
+        
+        if (i < Hv.length) {
+            html += `<td>${isBritish ? Hv[i].toFixed(0) : Hv[i].toFixed(2)}</td>`;
+        } else {
+            html += '<td>-</td>';
+        }
+        
         html += '</tr>';
     }
     
     document.getElementById('previewBody').innerHTML = html;
     
+    // Check for length mismatch warning
     const warning = document.getElementById('previewWarning');
     if (new Set(lengths).size > 1) {
         if (!warning) {
@@ -316,7 +510,7 @@ async function runCalculation(inputData) {
 }
 
 // ==========================================
-// CREATE PLOT - PONCHON-SAVARIT (SUBPOLOT MEPET + PROYEKSI NYAMBUNG)
+// CREATE PLOT - PONCHON-SAVARIT
 // ==========================================
 function createPlot(results) {
     const stageColors = [
@@ -325,6 +519,11 @@ function createPlot(results) {
     ];
     
     const traces = [];
+    
+    // Get current system type for y-axis label
+    const systemType = document.getElementById('systemType').value;
+    const isBritish = systemType.includes('ethanol');
+    const enthalpyUnit = isBritish ? 'BTU/lbmole' : 'Enthalpy (any units)';
     
     // ========== KURVA DASAR H-x-y ==========
     traces.push({
@@ -549,144 +748,134 @@ function createPlot(results) {
     });
     
     // ========== GARIS PROYEKSI ==========
-   // ========== GARIS PROYEKSI VERTIKAL (MULAI DARI KURVA) ==========
-// ========== GARIS PROYEKSI VERTIKAL (MULAI DARI KURVA) ==========
-results.stage_compositions.forEach((stage, i) => {
-    const color = stageColors[i % stageColors.length];
-    const x_liq = stage.x;
-    const y_liq = stage.y;
-    
-    // Cari enthalpy yang sesuai di KURVA
-    const idxLiq = Math.round(x_liq * 199);
-    const idxVap = Math.round(y_liq * 199);
-    const H_liq_stage = results.HL_curve[idxLiq];
-    const H_vap_stage = results.HV_curve[idxVap];
-    
-    if (H_liq_stage && H_vap_stage) {
-        // Proyeksi liquid
-        traces.push({
-            x: [x_liq, x_liq],
-            y: [H_liq_stage, results.yMin],
-            mode: 'lines',
-            showlegend: false,
-            line: {color, width: 1.8, dash: 'dot'},
-            xaxis: 'x',
-            yaxis: 'y'
-        });
-        traces.push({
-            x: [x_liq, x_liq],
-            y: [1.0, y_liq],
-            mode: 'lines',
-            showlegend: false,
-            line: {color, width: 1.8, dash: 'dot'},
-            xaxis: 'x2',
-            yaxis: 'y2'
-        });
+    results.stage_compositions.forEach((stage, i) => {
+        const color = stageColors[i % stageColors.length];
+        const x_liq = stage.x;
+        const y_liq = stage.y;
         
-        // Proyeksi vapor
-        traces.push({
-            x: [y_liq, y_liq],
-            y: [H_vap_stage, results.yMin],
-            mode: 'lines',
-            showlegend: false,
-            line: {color, width: 1.8, dash: 'dot'},
-            xaxis: 'x',
-            yaxis: 'y'
-        });
-        traces.push({
-            x: [y_liq, y_liq],
-            y: [1.0, y_liq],
-            mode: 'lines',
-            showlegend: false,
-            line: {color, width: 1.8, dash: 'dot'},
-            xaxis: 'x2',
-            yaxis: 'y2'
-        });
-    }
-});
+        const idxLiq = Math.round(x_liq * 199);
+        const idxVap = Math.round(y_liq * 199);
+        const H_liq_stage = results.HL_curve[idxLiq];
+        const H_vap_stage = results.HV_curve[idxVap];
+        
+        if (H_liq_stage && H_vap_stage) {
+            // Proyeksi liquid
+            traces.push({
+                x: [x_liq, x_liq],
+                y: [H_liq_stage, results.yMin],
+                mode: 'lines',
+                showlegend: false,
+                line: {color, width: 1.8, dash: 'dot'},
+                xaxis: 'x',
+                yaxis: 'y'
+            });
+            traces.push({
+                x: [x_liq, x_liq],
+                y: [1.0, y_liq],
+                mode: 'lines',
+                showlegend: false,
+                line: {color, width: 1.8, dash: 'dot'},
+                xaxis: 'x2',
+                yaxis: 'y2'
+            });
+            
+            // Proyeksi vapor
+            traces.push({
+                x: [y_liq, y_liq],
+                y: [H_vap_stage, results.yMin],
+                mode: 'lines',
+                showlegend: false,
+                line: {color, width: 1.8, dash: 'dot'},
+                xaxis: 'x',
+                yaxis: 'y'
+            });
+            traces.push({
+                x: [y_liq, y_liq],
+                y: [1.0, y_liq],
+                mode: 'lines',
+                showlegend: false,
+                line: {color, width: 1.8, dash: 'dot'},
+                xaxis: 'x2',
+                yaxis: 'y2'
+            });
+        }
+    });
     
     // ========== LAYOUT ==========
-// ========== LAYOUT - SUBPLOT MEPET + TITLE X ATAS DIHAPUS ==========
-// ========== LAYOUT - SUBPLOT CONCATENATED ==========
-// ========== LAYOUT - SUBPLOT NEMPEL BENERAN ==========
-// ========== LAYOUT - SUBPLOT CONCATENATED ==========
-const layout = {
-    title: {
-        text: '<b>Ponchon–Savarit Diagram: Binary Distillation Analysis</b>',
-        font: {size: 18, family: 'Arial', color: '#1E1E1E'},
-        x: 0.5,
-        y: 0.98  // Title agak naik
-    },
-    grid: {
-        rows: 2,
-        columns: 1,
-        pattern: 'independent',
-        roworder: 'top to bottom'
-    },
-    margin: {
-        l: 70,   // kiri
-        r: 130,  // kanan (buat legend)
-        t: 50,   // atas dikit
-        b: 70,   // bawah agak besar biar ga nutup
-        pad: 0
-    },
-    xaxis: {
-        domain: [0.1, 0.9],
-        title: '',  // No title
-        range: [0, 1],
-        tickformat: '.2f',
-        tickfont: {size: 10},
-        showline: true,
-        linecolor: '#1E1E1E',
-        mirror: true
-    },
-    yaxis: {
-        domain: [0.5, 0.95],  // Subplot atas (50% ke atas)
-        title: '<b>Enthalpy (MJ/kmol)</b>',
-        range: [results.yMin, results.yMax],
-        tickfont: {size: 10},
-        titlefont: {size: 12},
-        showline: true,
-        linecolor: '#1E1E1E',
-        mirror: true
-    },
-    xaxis2: {
-        domain: [0.1, 0.9],
-        title: '<b>Mole Fraction (x or y)</b>',
-        range: [0, 1],
-        tickformat: '.2f',
-        tickfont: {size: 10},
-        titlefont: {size: 12},
-        showline: true,
-        linecolor: '#1E1E1E',
-        mirror: true
-    },
-    yaxis2: {
-        domain: [0.05, 0.45],  // Subplot bawah (5% ke 45%)
-        title: '<b>y (Vapor Fraction)</b>',
-        range: [0, 1],
-        tickfont: {size: 10},
-        titlefont: {size: 12},
-        showline: true,
-        linecolor: '#1E1E1E',
-        mirror: true
-    },
-    // Legend di kanan
-    legend: {
-        x: 1.02,
-        y: 1,
-        xanchor: 'left',
-        yanchor: 'top',
-        font: {size: 9},
-        bgcolor: 'rgba(255,255,255,0.9)',
-        bordercolor: '#1E1E1E',
-        borderwidth: 1
-    },
-    // Ukuran plot
-    height: 700,
-    width: document.querySelector('.main-content')?.clientWidth - 40 || 1000
-};
-
+    const layout = {
+        title: {
+            text: '<b>Ponchon–Savarit Diagram: Binary Distillation Analysis</b>',
+            font: {size: 18, family: 'Arial', color: '#1E1E1E'},
+            x: 0.5,
+            y: 0.98
+        },
+        grid: {
+            rows: 2,
+            columns: 1,
+            pattern: 'independent',
+            roworder: 'top to bottom'
+        },
+        margin: {
+            l: 70,
+            r: 130,
+            t: 50,
+            b: 70,
+            pad: 0
+        },
+        xaxis: {
+            domain: [0.1, 0.9],
+            title: '',
+            range: [0, 1],
+            tickformat: '.2f',
+            tickfont: {size: 10},
+            showline: true,
+            linecolor: '#1E1E1E',
+            mirror: true
+        },
+        yaxis: {
+            domain: [0.5, 0.95],
+            title: `<b>Enthalpy (${enthalpyUnit})</b>`,
+            range: [results.yMin, results.yMax],
+            tickfont: {size: 10},
+            titlefont: {size: 12},
+            showline: true,
+            linecolor: '#1E1E1E',
+            mirror: true
+        },
+        xaxis2: {
+            domain: [0.1, 0.9],
+            title: '<b>Mole Fraction (x or y)</b>',
+            range: [0, 1],
+            tickformat: '.2f',
+            tickfont: {size: 10},
+            titlefont: {size: 12},
+            showline: true,
+            linecolor: '#1E1E1E',
+            mirror: true
+        },
+        yaxis2: {
+            domain: [0.05, 0.45],
+            title: '<b>y (Vapor Fraction)</b>',
+            range: [0, 1],
+            tickfont: {size: 10},
+            titlefont: {size: 12},
+            showline: true,
+            linecolor: '#1E1E1E',
+            mirror: true
+        },
+        legend: {
+            x: 1.02,
+            y: 1,
+            xanchor: 'left',
+            yanchor: 'top',
+            font: {size: 9},
+            bgcolor: 'rgba(255,255,255,0.9)',
+            bordercolor: '#1E1E1E',
+            borderwidth: 1
+        },
+        height: 700,
+        width: document.querySelector('.main-content')?.clientWidth - 40 || 1000
+    };
 
     Plotly.newPlot('plotDiv', traces, layout, {responsive: true});
     
@@ -702,15 +891,20 @@ const layout = {
 function displayResults(results) {
     createPlot(results);
     
+    const systemType = document.getElementById('systemType').value;
+    const isBritish = systemType.includes('ethanol');
+    const enthalpyUnit = isBritish ? 'BTU/lbmole' : 'MJ/kmol';
+    const powerUnit = 'kW';
+    
     const summaryHtml = `
         <tr><td>Distillate Flow Rate (D)</td><td>${results.D} kmol/hr</td></tr>
         <tr><td>Bottoms Flow Rate (W)</td><td>${results.W} kmol/hr</td></tr>
-        <tr><td>Δ_R</td><td>(${results.xDeltaR}, ${results.HDeltaR} MJ/kmol)</td></tr>
-        <tr><td>Δ_S</td><td>(${results.xDeltaS}, ${results.HDeltaS} MJ/kmol)</td></tr>
-        <tr><td>Condenser Duty (Qc)</td><td>${results.QcKW} kW</td></tr>
-        <tr><td>Reboiler Duty (Qr)</td><td>${results.QrKW} kW</td></tr>
-        <tr><td>Δ_R min</td><td>(${results.xD}, ${results.QPrimeMin} MJ/kmol)</td></tr>
-        <tr><td>Δ_S min</td><td>(${results.xB}, ${results.QDoublePrimeMin} MJ/kmol)</td></tr>
+        <tr><td>Δ_R</td><td>(${results.xDeltaR}, ${results.HDeltaR} ${enthalpyUnit})</td></tr>
+        <tr><td>Δ_S</td><td>(${results.xDeltaS}, ${results.HDeltaS} ${enthalpyUnit})</td></tr>
+        <tr><td>Condenser Duty (Qc)</td><td>${results.QcKW} ${powerUnit}</td></tr>
+        <tr><td>Reboiler Duty (Qr)</td><td>${results.QrKW} ${powerUnit}</td></tr>
+        <tr><td>Δ_R min</td><td>(${results.xD}, ${results.QPrimeMin} ${enthalpyUnit})</td></tr>
+        <tr><td>Δ_S min</td><td>(${results.xB}, ${results.QDoublePrimeMin} ${enthalpyUnit})</td></tr>
         <tr><td>Minimum Reflux Ratio</td><td>${results.RMin}</td></tr>
         <tr><td>Number of Stages</td><td>${results.stages}</td></tr>
         <tr><td>Feed Stage</td><td>${results.feed_stage}</td></tr>
@@ -783,6 +977,35 @@ async function initPyodide() {
     document.getElementById(id)?.addEventListener('input', updatePreview);
 });
 
+document.getElementById('systemType').addEventListener('change', function() {
+    const systemType = this.value;
+    currentSystem = systemType;
+    
+    // Reset system info display
+    const systemInfo = document.getElementById('systemInfo');
+    
+    if (systemType === 'user-defined') {
+        systemInfo.style.display = 'none';
+        
+        // Restore example data
+        document.getElementById('xData').value = '[0, 0.08, 0.18, 0.25, 0.49, 0.65, 0.79, 0.91, 1.0]';
+        document.getElementById('yData').value = '[0, 0.28, 0.43, 0.51, 0.73, 0.83, 0.90, 0.96, 1.0]';
+        document.getElementById('Hl').value = '[24.3, 24.1, 23.2, 22.8, 22.05, 21.75, 21.7, 21.6, 21.4]';
+        document.getElementById('Hv').value = '[61.2, 59.6, 58.5, 58.1, 56.5, 55.2, 54.4, 53.8, 53.3]';
+        
+        updateUnitDisplay('user-defined');
+        showToast('📝 Switched to User Defined mode (any units)', 'info');
+    } 
+    else if (systemType === 'ethanol-water-1atm') {
+        loadEthanolWaterDataset('1atm');
+    }
+    else if (systemType === 'ethanol-water-76mmHg') {
+        loadEthanolWaterDataset('76mmHg');
+    }
+    
+    updatePreview();
+});
+
 document.getElementById('q').addEventListener('change', function() {
     document.getElementById('customQDiv').style.display = 
         this.value === 'custom' ? 'block' : 'none';
@@ -824,9 +1047,15 @@ document.getElementById('calculateBtn').addEventListener('click', async function
     
     try {
         const results = await runCalculation(inputData);
-        results.error ? alert('Error: ' + results.error) : displayResults(results);
+        if (results.error) {
+            alert('Error: ' + results.error);
+        } else {
+            displayResults(results);
+            showToast('✅ Calculation completed successfully!', 'success');
+        }
     } catch (error) {
         alert('Error: ' + error.message);
+        showToast('❌ Calculation failed: ' + error.message, 'warning');
     } finally {
         btn.disabled = false;
         loading.style.display = 'none';
@@ -835,27 +1064,33 @@ document.getElementById('calculateBtn').addEventListener('click', async function
 
 document.getElementById('exportBtn').addEventListener('click', function() {
     if (!currentResults) return;
-    let csv = 'Stage,x (Liquid),y (Vapor)\n';
+    
+    const systemType = document.getElementById('systemType').value;
+    const isBritish = systemType.includes('ethanol');
+    const enthalpyUnit = isBritish ? 'BTU/lbmole' : 'MJ/kmol';
+    
+    let csv = 'Stage,x (Liquid),y (Vapor),HL (' + enthalpyUnit + '),HV (' + enthalpyUnit + ')\n';
     currentResults.stage_compositions.forEach((stage, i) => {
-        csv += `${i+1},${stage.x.toFixed(4)},${stage.y.toFixed(4)}\n`;
+        // Find corresponding enthalpy values
+        const idxLiq = Math.round(stage.x * 199);
+        const idxVap = Math.round(stage.y * 199);
+        const HL = currentResults.HL_curve[idxLiq]?.toFixed(2) || 'N/A';
+        const HV = currentResults.HV_curve[idxVap]?.toFixed(2) || 'N/A';
+        
+        csv += `${i+1},${stage.x.toFixed(4)},${stage.y.toFixed(4)},${HL},${HV}\n`;
     });
+    
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'ponchon_savarit_results.csv'; a.click();
+    a.href = url; 
+    a.download = `ponchon_savarit_results_${systemType}.csv`; 
+    a.click();
     window.URL.revokeObjectURL(url);
+    
+    showToast('📊 Results exported to CSV', 'success');
 });
 
+// Initialize
 updatePreview();
 initPyodide();
-
-
-
-
-
-
-
-
-
-
-
