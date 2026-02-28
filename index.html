@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ponchon-Savarit Distillation Calculator</title>
+    <title>Ponchon-Savarit Distillation Calculator - Ethanol-Water (British Units)</title>
     
     <!-- Plotly -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
@@ -29,6 +29,7 @@
             height: 100%;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f8f9fa;
+            overflow: hidden;
         }
 
         /* ========== MAIN CONTAINER ========== */
@@ -69,7 +70,7 @@
         /* ========== PLOT CONTAINER ========== */
         #plotDiv {
             width: 100%;
-            height: 500px;  /* DIKECILIN biar tombol keliatan */
+            height: 500px;
             margin-bottom: 30px;
             border: 1px solid #dee2e6;
             border-radius: 12px;
@@ -110,8 +111,6 @@
             background: white;
             position: relative;
             z-index: 30;
-            opacity: 1 !important;
-            visibility: visible !important;
         }
 
         .nav-tabs .nav-link:hover {
@@ -162,6 +161,16 @@
             box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
         }
 
+        input[readonly] {
+            background-color: #f0f7ff;
+            cursor: default;
+            border-color: #86b7fe;
+        }
+
+        input[readonly]:hover {
+            border-color: #0d6efd;
+        }
+
         .btn {
             border-radius: 8px;
             padding: 10px 20px;
@@ -190,6 +199,55 @@
         #previewTable {
             font-family: 'Courier New', monospace;
             font-size: 0.85rem;
+        }
+
+        /* ========== UNIT BADGE ========== */
+        .unit-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            background: #e7f5ff;
+            color: #0d6efd;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 5px;
+        }
+
+        .system-badge {
+            padding: 4px 10px;
+            background: #0d6efd;
+            color: white;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        /* ========== TOAST NOTIFICATIONS ========== */
+        #toastContainer {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+
+        .toast {
+            opacity: 0.95;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            min-width: 300px;
+            margin-bottom: 10px;
+        }
+
+        .toast.bg-success {
+            background: linear-gradient(135deg, #198754, #157347) !important;
+        }
+
+        .toast.bg-info {
+            background: linear-gradient(135deg, #0dcaf0, #0b9fc0) !important;
+        }
+
+        .toast.bg-warning {
+            background: linear-gradient(135deg, #ffc107, #d39e00) !important;
         }
 
         /* ========== LOADING OVERLAY ========== */
@@ -229,6 +287,18 @@
             font-size: 14px;
         }
 
+        /* ========== CARD STYLES ========== */
+        .card-header {
+            font-weight: 600;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px dashed #dee2e6;
+        }
+
         /* ========== RESPONSIVE ========== */
         @media (max-width: 768px) {
             .sidebar {
@@ -264,11 +334,44 @@
                         <i class="fas fa-spinner fa-spin"></i> Loading Python environment...
                     </div>
                     
+                    <!-- SYSTEM SELECTOR CARD -->
+                    <div class="card mb-4 border-primary">
+                        <div class="card-header bg-primary text-white py-2">
+                            <i class="fas fa-cog me-2"></i>System Configuration
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="fas fa-flask me-1"></i> System Type
+                                </label>
+                                <select class="form-select" id="systemType">
+                                    <option value="user-defined" selected>📝 User Defined (SI Units - any)</option>
+                                    <option value="ethanol-water-1atm">🍸 Ethanol-Water (1 atm) - British Units</option>
+                                    <option value="ethanol-water-76mmHg">🍸 Ethanol-Water (76 mmHg) - British Units</option>
+                                </select>
+                            </div>
+                            
+                            <!-- System Info Display -->
+                            <div class="alert alert-info mb-0 py-2" id="systemInfo" style="display: none;">
+                                <div class="d-flex align-items-start">
+                                    <i class="fas fa-info-circle me-2 mt-1"></i>
+                                    <div id="systemInfoText"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Current Units Display -->
+                            <div class="mt-2 small" id="unitInfo">
+                                <span class="badge bg-secondary me-1">Current Units:</span>
+                                <span id="unitDisplay" class="unit-badge">User Defined (any units)</span>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Tabs -->
                     <ul class="nav nav-tabs mb-3" id="inputTabs" role="tablist">
                         <li class="nav-item">
                             <button class="nav-link active" id="data-tab" data-bs-toggle="tab" data-bs-target="#data">
-                                <i class="fas fa-table"></i> Data
+                                <i class="fas fa-table"></i> VLE Data
                             </button>
                         </li>
                         <li class="nav-item">
@@ -282,54 +385,59 @@
                     <div class="tab-content">
                         <!-- DATA TAB -->
                         <div class="tab-pane fade show active" id="data">
-                            <div class="alert alert-info">
+                            <div class="alert alert-info" id="dataInfo">
                                 <i class="fas fa-info-circle"></i> 
-                                Input data sebagai array. Pisahkan dengan koma.
+                                <span id="dataInfoText">Input data sebagai array. Pisahkan dengan koma.</span>
+                                <br><small id="unitNote">User Defined: bebas menggunakan satuan apapun (SI, British, dll)</small>
                             </div>
                             
                             <div class="mb-3">
                                 <label class="form-label">
-                                    <i class="fas fa-chart-line me-1"></i> x (Liquid)
+                                    <i class="fas fa-chart-line me-1"></i> x (Liquid mole fraction)
                                 </label>
                                 <input type="text" class="form-control" id="xData" 
                                        value="[0, 0.08, 0.18, 0.25, 0.49, 0.65, 0.79, 0.91, 1.0]"
                                        placeholder="[0, 0.1, 0.2, ...]">
-                                <small class="text-muted">Komposisi liquid (0-1)</small>
                             </div>
                             
                             <div class="mb-3">
                                 <label class="form-label">
-                                    <i class="fas fa-chart-line me-1"></i> y (Vapor)
+                                    <i class="fas fa-chart-line me-1"></i> y (Vapor mole fraction)
                                 </label>
                                 <input type="text" class="form-control" id="yData" 
                                        value="[0, 0.28, 0.43, 0.51, 0.73, 0.83, 0.90, 0.96, 1.0]"
                                        placeholder="[0, 0.3, 0.5, ...]">
-                                <small class="text-muted">Komposisi vapor (0-1)</small>
                             </div>
                             
                             <div class="mb-3">
                                 <label class="form-label">
                                     <i class="fas fa-fire me-1"></i> Hl (Liquid Enthalpy)
+                                    <span id="hlUnit" class="unit-badge">any units</span>
                                 </label>
                                 <input type="text" class="form-control" id="Hl" 
                                        value="[24.3, 24.1, 23.2, 22.8, 22.05, 21.75, 21.7, 21.6, 21.4]"
                                        placeholder="[100, 95, 90, ...]">
-                                <small class="text-muted">Entalpi liquid (MJ/kmol)</small>
                             </div>
                             
                             <div class="mb-3">
                                 <label class="form-label">
                                     <i class="fas fa-fire me-1"></i> Hv (Vapor Enthalpy)
+                                    <span id="hvUnit" class="unit-badge">any units</span>
                                 </label>
                                 <input type="text" class="form-control" id="Hv" 
                                        value="[61.2, 59.6, 58.5, 58.1, 56.5, 55.2, 54.4, 53.8, 53.3]"
                                        placeholder="[200, 190, 180, ...]">
-                                <small class="text-muted">Entalpi vapor (MJ/kmol)</small>
                             </div>
+                            
+                            <!-- Temperature data (hidden, for ethanol-water) -->
+                            <input type="hidden" id="TData" value="">
                             
                             <!-- Preview Data -->
                             <div class="preview-container">
-                                <h6 class="mb-3"><i class="fas fa-eye me-2"></i>Data Preview</h6>
+                                <h6 class="mb-3">
+                                    <i class="fas fa-eye me-2"></i>Data Preview
+                                    <span id="previewUnitBadge" class="unit-badge">any units</span>
+                                </h6>
                                 <div class="table-responsive">
                                     <table class="table table-sm table-bordered" id="previewTable">
                                         <thead>
@@ -350,22 +458,22 @@
                         <!-- PARAMETERS TAB -->
                         <div class="tab-pane fade" id="params">
                             <div class="mb-3">
-                                <label class="form-label">Feed Composition (zF)</label>
+                                <label class="form-label">Feed Composition (zF) <small class="text-muted">(mole fraction)</small></label>
                                 <input type="number" class="form-control" id="zF" step="0.01" min="0" max="1" value="0.42">
                             </div>
                             
                             <div class="mb-3">
-                                <label class="form-label">Feed Flow Rate (F) [kmol/hr]</label>
+                                <label class="form-label">Feed Flow Rate (F) <small class="text-muted">(kmol/hr)</small></label>
                                 <input type="number" class="form-control" id="F" step="0.1" min="0" value="10">
                             </div>
                             
                             <div class="mb-3">
-                                <label class="form-label">Distillate Composition (xD)</label>
+                                <label class="form-label">Distillate Composition (xD) <small class="text-muted">(mole fraction)</small></label>
                                 <input type="number" class="form-control" id="xD" step="0.01" min="0" max="1" value="0.97">
                             </div>
                             
                             <div class="mb-3">
-                                <label class="form-label">Bottoms Composition (xB)</label>
+                                <label class="form-label">Bottoms Composition (xB) <small class="text-muted">(mole fraction)</small></label>
                                 <input type="number" class="form-control" id="xB" step="0.01" min="0" max="1" value="0.01">
                             </div>
                             
@@ -403,11 +511,11 @@
                     </div>
                 </div>
                 
-                <!-- MAIN CONTENT - SCROLLABLE -->
+                <!-- MAIN CONTENT -->
                 <div class="col-md-8 col-lg-9 main-content">
                     <!-- Plot -->
                     <div id="plotDiv"></div>
-                    <div style="height: 80px; width: 100%; display: block; background: transparent;"></div>
+                    
                     <!-- Results Section -->
                     <div class="results-section">
                         <!-- NAV TABS -->
@@ -495,6 +603,9 @@
         </div>
     </div>
     
+    <!-- Toast Container -->
+    <div id="toastContainer"></div>
+    
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     
@@ -502,4 +613,3 @@
     <script src="script.js"></script>
 </body>
 </html>
-
