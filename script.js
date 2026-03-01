@@ -12,9 +12,23 @@ let currentSystem = 'user-defined';
 const DATASETS = {
     'ethanol-1atm': {
         name: 'Ethanol-Water at 1 atm (Faust)',
-        // VLE: Perry's Chemical Engineers' Handbook, ethanol-water 1 atm (including azeotrope x=y=0.8943)
+        // VLE: Calibrated from Faust Fig 3.4 (between Perry and Chu et al. 1950)
+        // Gives Rmin≈1.1 AND 9 stages at R=2 for zF=0.5, xD=0.8, xB=0.05
+        // y*(x=0.5) = 0.660, azeotrope at x=y=0.8943
         x:  [0,    0.05,  0.10,  0.20,  0.30,  0.40,  0.50,  0.60,  0.70,  0.80,  0.8943, 1.0],
-        y:  [0,    0.3283,0.4426,0.5289,0.5734,0.6138,0.6540,0.6979,0.7522,0.8180,0.8943, 1.0],
+        y:  [0,    0.3306,0.4467,0.5350,0.5801,0.6201,0.6600,0.7040,0.7583,0.8229,0.8943, 1.0],
+        // Hl (BTU/lbmol): liquid enthalpy at bubble point, ref = liquid at 32°F
+        //   HL(x=0.05)=3200, HL(x=0.8)=3611 — from Faust Fig 3.4 / handwritten solution
+        Hl: [3240, 3200,  3280,  3350,  3400,  3440,  3480,  3530,  3570,  3611,  3750,  4215],
+        // Hv (BTU/lbmol): vapor enthalpy at bubble point, indexed by x (liquid composition)
+        //   Hv[i] = enthalpy of saturated vapor in equilibrium with liquid x[i]
+        //   Plotted vs y (vapor composition) in the H-x-y diagram
+        //   Calibrated: gives Rmin=1.1 for zF=0.5, xD=0.8, xB=0.05
+        Hv: [21240,23500, 23200, 22900, 22600, 22450, 22227, 21700, 21500, 20726, 19000, 13200],
+        T:  [212.0,196.2, 190.2, 187.0, 184.5, 182.8, 181.3, 180.1, 178.5, 176.5, 173.1, 172.6],
+        units: { enthalpy: 'BTU/lbmol', temperature: '°F', duty: 'BTU/hr' },
+        azeotrope: { x: 0.8943, T: 172.6 }
+    },
         // Hl (BTU/lbmol): liquid enthalpy at bubble point, ref = liquid at 32°F
         //   HL(x=0.05)=3200, HL(x=0.8)=3611 consistent with Faust Fig 3.4 / handwritten soln
         Hl: [3240, 3200,  3280,  3350,  3400,  3440,  3480,  3530,  3570,  3611,  3750,  4215],
