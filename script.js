@@ -12,6 +12,8 @@ let currentSystem = 'user-defined';
 const DATASETS = {
     'ethanol-1atm': {
         name: 'Ethanol-Water at 1 atm (Faust)',
+        x:  [0,    0.05,  0.10,  0.20,  0.30,  0.40,  0.50,  0.60,  0.70,  0.80,  0.8943, 1.0],
+        y:  [0,    0.3306,0.4467,0.5350,0.5801,0.6201,0.6600,0.7040,0.7583,0.8229,0.8943, 1.0],
         // Hl (BTU/lbmol): liquid enthalpy at bubble point, ref = liquid at 32°F
         //   HL(x=0.05)=3200, HL(x=0.8)=3611 consistent with Faust Fig 3.4 / handwritten soln
         Hl: [3240, 3200,  3280,  3350,  3400,  3440,  3480,  3530,  3570,  3611,  3750,  4215],
@@ -1088,4 +1090,5 @@ document.addEventListener('DOMContentLoaded', function () {
     updatePreview();
     initPyodide();
 });
+
 
